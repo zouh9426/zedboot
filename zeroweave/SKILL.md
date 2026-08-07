@@ -21,9 +21,16 @@ description: 项目开局编排器。从零创建项目时一次性装好三套�
 - **adopt（旧项目改造）**：目录里已有成规模的代码/文档，用户说"改造/补体系/规范化/接入 ZeroWeave"。
 - 拿不准就问一句；两者只差一个审计头部，安装逻辑完全复用。
 
+## 环境探测（会话开始时执行）
+
+本 Skill 工具无关（Kimi Code / Claude Code / Codex 等均可），源码里不写死任何安装路径，运行时按以下规则解析：
+
+- **候选技能目录**：`~/.agents/skills/`（通用约定）、`~/.kimi-code/skills/`（Kimi Code）、`~/.claude/skills/`（Claude Code）、`~/.codex/skills/`（Codex）、当前项目的 `.agents/skills/` 与 `.kimi-code/skills/`。当前工具另有约定的技能目录时，以其为准。
+- **按名识别，不按目录名**：在候选目录下逐层找 `SKILL.md`，读 frontmatter 的 `name:` 字段匹配（目录名可能与 skill 名不一致）。本 Skill 自身的路径（`references/`、`assets/`、`scripts/` 的基准）同样由"name 为 zeroweave 的 SKILL.md 所在目录"解析，命令中的 `<skill路径>` 即指它。
+
 ## 依赖自检（任何工作流的第一步）
 
-1. **uiweft 自检**（项目有界面时）：按 skill 名在常见位置搜索 `uiweft/SKILL.md`：`~/.kimi-code/skills/`、`~/.agents/skills/`、当前项目的 `.agents/skills/` 与 `.kimi-code/skills/`。找到 → 记录其路径备用；找不到 → **明确提示用户安装 uiweft**，并告知 UI 支线暂停，管理体系与部署体系不受影响继续走。不要试图自己替代 uiweft 定 UI 规范。
+1. **uiweft 自检**（项目有界面时）：按上面的环境探测规则查找 name 为 `uiweft` 的 SKILL.md。找到 → 记录其路径备用；找不到 → **明确提示用户安装 uiweft**（https://github.com/zouh9426/uiweft），并告知 UI 支线暂停，管理体系与部署体系不受影响继续走。不要试图自己替代 uiweft 定 UI 规范。
 2. **GitHub 认证探测**（可部署/混合项目）：`gh auth status` 或检查 `~/.ssh/` 已有 key 与 `ssh -T git@github.com`。已配好 → 只确认账号，不问凭据；没配 → 在信息采集时给用户一次性配置指引，或允许"暂用本地 Git，远程待补"。
 
 ## Phase 0：信息采集（init 的硬性前置；adopt 先挖后问）

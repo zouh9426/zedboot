@@ -1,22 +1,46 @@
 # ZeroWeave Guided-Install Prompt
 
-[中文](SETUP.md)
-
-Paste everything inside the separator below to your AI (Kimi Code / Claude Code / Codex, etc.). It will run the full installation and self-check.
+> **Usage**: copy the **entire content** of this file (starting below the separator) and paste it to your AI agent (Kimi Code / Claude Code / Codex, etc.). It will run the full installation and self-check.
+> 中文版：[SETUP.md](SETUP.md)
 
 ---
 
-Please install the ZeroWeave skill (a project-bootstrap orchestrator) for me. Steps:
+You are an installation assistant. Please install **ZeroWeave** (a project-bootstrap orchestrator skill) for me. Follow the steps below and tell me the result of each; on any failure, stop and report — do not skip ahead.
 
-1. Check which skills directories exist on my machine: `~/.kimi-code/skills/`, `~/.agents/skills/`, or the current project's `.kimi-code/skills/` / `.agents/skills/`. If none exists, create `~/.agents/skills/` (shared across tools).
-2. Install ZeroWeave into it: `git clone https://github.com/zouh9426/zeroweave <chosen-dir>/zeroweave`. If I gave you a zip or local directory instead, copy it there and make sure `zeroweave/SKILL.md` exists.
-3. Optional dependency check: look for `uiweft/SKILL.md` in the same candidate locations. If found, tell me the path; if not, tell me "the UI track is unavailable; uiweft (https://github.com/zouh9426/uiweft) can be installed later — the management and deployment systems are unaffected".
-4. Self-check:
-   - Read `zeroweave/SKILL.md` and confirm the frontmatter parses (name/description present);
-   - Run `python3 zeroweave/scripts/audit.py --help` (or a trial run against a directory) to confirm the audit tool works;
-   - Report: install location, uiweft detection result, self-check conclusion.
-5. Tell me how to trigger it: start a new AI session and say "Initialize this project from scratch with ZeroWeave" or "Retrofit this project with ZeroWeave".
+## Step 1: Identify the environment
 
-Stop and report on any failure — do not improvise.
+1. Identify which tool you are (Kimi Code / Claude Code / Codex / other) and determine your skills directory. Common candidates:
+   - `~/.agents/skills/` (shared convention)
+   - `~/.kimi-code/skills/` (Kimi Code)
+   - `~/.claude/skills/` (Claude Code)
+   - `~/.codex/skills/` (Codex)
+   If your tool has its own convention, that wins.
+2. Check dependencies: `python3 --version` (needed by the adopt workflow's audit script, stdlib only). If missing, tell me how to install it and stop.
+
+## Step 2: Check existing installations
+
+Search the skills directory recursively for `SKILL.md` files and read the `name:` field in their frontmatter to check whether these skills are installed (**match by name, not directory name** — a directory name may differ from the skill name):
+
+| skill name | role | required? |
+|---|---|---|
+| `zeroweave` | the orchestrator itself | required |
+| `uiweft` | UI track (generates DESIGN.md) | optional |
+
+Give me an "installed / missing" list.
+
+## Step 3: Install what is missing
+
+- **zeroweave (required)**: `git clone https://github.com/zouh9426/zeroweave` into a temporary directory, copy its `zeroweave/` **subdirectory** into the skills directory (the repo root is not the skill — the subdirectory is), then delete the temp directory.
+- **uiweft (optional)**: if I need the UI system and you didn't find it in step 2, tell me, and optionally install it following the SETUP guide at https://github.com/zouh9426/uiweft; skipping it does not affect the management or deployment systems.
+- Afterwards, verify again by `name:`.
+
+## Step 4: Self-check
+
+Run these in order (use the actual paths resolved in steps 2/3):
+
+1. Read `<zeroweave>/SKILL.md` and confirm the frontmatter parses (`name:` and `description:` present).
+2. `python3 <zeroweave>/scripts/audit.py --help` — should print usage; then run it once against a real directory — should print a structured audit report, not an error.
+
+When both pass, report to me: the zeroweave install path, the uiweft detection result, and one confirmation line — "ZeroWeave is installed; say 'Initialize this project from scratch with ZeroWeave' or 'Retrofit this old project with ZeroWeave' in your project to begin."
 
 ---
