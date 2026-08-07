@@ -1,0 +1,77 @@
+# ============================================================
+# Next.js + Prisma + SQLite 生产 Dockerfile（多阶段，ZeroWeave skill 模板）
+#
+# 用法：
+#   - 本模板落地为项目根目录的 `Dockerfile`
+#   - 配套同目录 `docker-entrypoint.sh.tmpl` → 项目根目录 `docker-entrypoint.sh`
+#   - 配套 `assets/deploy/docker-compose.yml.tmpl` → 项目根目录 `docker-compose.yml`
+#   - 假设：npm + package-lock.json；prisma/ 目录含 schema.prisma 与 migrations/
+#   - 若项目用 pnpm / yarn，把 deps 阶段的 `npm ci` 换成对应安装命令
+#
+# 设计点对应 references/deployment-guide.md §3 与 §7（standalone 依赖追踪不全）。
+# ============================================================
+
+# ---- 阶段 1: deps（安装依赖 + 原生模块兜底）----
+FROM node:20-alpine AS deps
+WORKDIR /app
+COPY package.json package-lock.json ./
+RUN npm ci
+# 兜底：原生依赖（Prisma engines、sharp 等）的 postinstall 可能被 npm 脚本策略
+# 拦截，显式 rebuild 保证原生模块可用
+RUN npm rebuild
+
+# ---- 阶段 2: builder（生成 Prisma Client + standalone 构建）----
+FROM node:20-alpine AS builder
+WORKDIR /app
+COPY --from=deps /app/node_modules ./node_modules
+COPY . .
+# 生成 Prisma Client（若 postinstall 已含 prisma generate 可省略，显式执行更稳）
+RUN npx prisma generate
+# standalone 产物输出到 .next/standalone（含 server.js 与追踪到的 node_modules）
+RUN npm run build
+
+# ---- 阶段 3: prisma-cli（独立安装 Prisma CLI，仅用于启动迁移）----
+FROM node:20-alpine AS prisma-cli
+WORKDIR /app
+# 单独安装 Prisma CLI（含 engines）到 /app/cli，与运行时 node_modules 隔离；
+# 版本建议与项目 package.json 中的 prisma 版本一致
+RUN npm install --prefix /app/cli prisma@5
+# 迁移需要 schema 与 migrations/
+COPY prisma ./prisma
+
+# ---- 阶段 4: runner（最小生产运行时）----
+FROM node:20-alpine AS runner
+WORKDIR /app
+ENV NODE_ENV=production
+
+# standalone 产物：已包含 server.js 与大部分 node_modules
+COPY --from=builder /app/.next/standalone ./
+# standalone 默认不含静态资源与 public，需显式拷；若项目无 public 目录则删掉对应行
+COPY --from=builder /app/.next/static ./.next/static
+COPY --from=builder /app/public ./public
+
+# ---- standalone 依赖追踪不全，原生/特殊模块按需显式拷贝 ----
+# 例 1：sharp 需要整个包 + @img 目录（含平台二进制），否则运行时报模块缺失。
+#       项目使用 sharp 时取消注释以下两行：
+# COPY --from=builder /app/node_modules/sharp ./node_modules/sharp
+# COPY --from=builder /app/node_modules/@img ./node_modules/@img
+# 例 2：Prisma engines 的原生引擎文件（.so.node）按版本/路径显式拷贝：
+# COPY --from=builder /app/node_modules/@prisma/engines ./node_modules/@prisma/engines
+# 例 3：被打包进内部 chunk 但被独立脚本引用的库（如 bcryptjs）同样显式拷一份。
+
+# Prisma CLI 独立目录（与运行时隔离）+ schema/migrations
+COPY --from=prisma-cli /app/cli ./cli
+COPY --from=prisma-cli /app/prisma ./prisma
+
+# 容器启动入口：先迁移后启动
+COPY docker-entrypoint.sh ./docker-entrypoint.sh
+RUN chmod +x docker-entrypoint.sh
+
+# 容器内在线备份用（sqlite3 CLI）
+RUN apk add --no-cache sqlite3
+
+# 数据卷：数据库与上传文件持久化（compose 绑定挂载 ./data:/app/data）
+VOLUME /app/data
+
+EXPOSE 3000
+ENTRYPOINT ["/app/docker-entrypoint.sh"]

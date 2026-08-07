@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# ============================================================
+# 部署脚本（本地执行，ZeroWeave skill 模板）
+# 把项目代码从本地 rsync 直推到服务器 /opt/<项目名> 重建
+# 落地：复制到本地项目根目录为 deploy-rsync.sh，填入变量区后在项目根目录执行
+# 对应 references/deployment-guide.md §4
+# ============================================================
+
+# ---- 变量区（部署前填写）----
+PROJECT_NAME="<项目名>"
+DEPLOY_USER="<账号>"
+SERVER_IP="<服务器IP>"
+SSH_KEY="~/.ssh/<项目名>_deploy"        # 本地部署密钥（与服务器项目账号 authorized_keys 配对）
+REMOTE_DIR="/opt/${PROJECT_NAME}"
+
+# ---- 同步代码 ----
+# 排除敏感与运行时内容：.env 只在服务器维护；data/backups 是线上数据，
+# 绝不可被本地覆盖，否则一次部署就会覆盖线上密钥和数据
+echo "[deploy] 同步代码到 ${DEPLOY_USER}@${SERVER_IP}:${REMOTE_DIR}/"
+rsync -az --delete \
+  --exclude .git --exclude node_modules --exclude .env \
+  --exclude data --exclude backups \
+  -e "ssh -i ${SSH_KEY}" \
+  ./ "${DEPLOY_USER}@${SERVER_IP}:${REMOTE_DIR}/"
+
+echo "[deploy] 代码已同步。请在服务器执行："
+echo "  cd /opt/${PROJECT_NAME} && docker compose up -d --build   # 启动时自动迁移"

@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# ============================================================
+# 静态站发布脚本（本地执行，ZeroWeave skill 模板）
+# 流程：本地 `npm run build` → 本脚本只同步 dist/ → 服务器 Caddy 直接伺服
+# 落地：复制到本地项目根目录为 deploy-rsync-static.sh，填入变量区后执行
+# 对应 references/deployment-guide.md §4 与 assets/deploy/static/README.md
+# ============================================================
+
+# ---- 变量区（部署前填写）----
+PROJECT_NAME="<项目名>"
+DEPLOY_USER="<账号>"
+SERVER_IP="<服务器IP>"
+SSH_KEY="~/.ssh/<项目名>_deploy"        # 本地部署密钥（与服务器项目账号 authorized_keys 配对）
+REMOTE_DIR="/opt/${PROJECT_NAME}/dist"
+
+# ---- 前置检查：构建产物存在 ----
+if [ ! -d "./dist" ]; then
+  echo "[deploy] 未找到 ./dist，请先在本地执行 npm run build" >&2
+  exit 1
+fi
+
+# ---- 同步 dist/（只推构建产物，排除敏感与备份）----
+echo "[deploy] 同步 ./dist/ → ${DEPLOY_USER}@${SERVER_IP}:${REMOTE_DIR}/"
+rsync -az --delete \
+  --exclude .git --exclude .env --exclude backups \
+  -e "ssh -i ${SSH_KEY}" \
+  ./dist/ "${DEPLOY_USER}@${SERVER_IP}:${REMOTE_DIR}/"
+
+echo "[deploy] 完成。Caddy 直接伺服该目录，无需重启；"
+echo "        仅当改动服务器 Caddyfile 后才需 caddy reload。"

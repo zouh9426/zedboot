@@ -1,0 +1,26 @@
+# ============================================================
+# 通用 docker-compose 模板（ZeroWeave skill）
+# 占位符：<项目名> 项目名；<端口> 本机回环端口（共机时每项目唯一）
+# 落地：复制到项目根目录为 docker-compose.yml，替换占位符。
+# 设计点（详见 references/deployment-guide.md §3）：
+#   - 端口只绑 127.0.0.1，容器不直接暴露公网，由反向代理按域名路由对外
+#   - ./data 绑定挂载：备份 = 打包宿主机 ./data；迁移服务器 = 拷目录
+#   - .env 提供密钥与开关，永不入库；.env.example 入库作为模板
+# ============================================================
+services:
+  <项目名>:
+    build: .
+    container_name: <项目名>
+    ports:
+      # 只绑定本机回环，由反向代理对外（HTTPS）；共机时每项目分配不同端口
+      - "127.0.0.1:<端口>:3000"   # 容器内端口按栈改：Next.js 3000 / Python(uvicorn) 8000 / Go 8080
+    env_file: .env          # 敏感配置不入 git
+    environment:
+      # 栈相关示例：容器内一律用绝对路径（相对路径解析基准会变化）
+      # Next.js + Prisma + SQLite 示例：
+      # DATABASE_URL: "file:/app/data/<项目名>.db"
+      # UPLOAD_DIR: "/app/data/uploads"
+    volumes:
+      # 绑定挂载：备份/恢复直接在宿主机操作 ./data
+      - ./data:/app/data
+    restart: unless-stopped # 开机自启、崩溃自动拉起

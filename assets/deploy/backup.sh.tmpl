@@ -1,0 +1,59 @@
+#!/bin/bash
+# ============================================================
+# 项目备份脚本（ZeroWeave skill 模板）
+# 部署：归属项目账号，加入其 crontab，例如：
+#   30 3 * * * /opt/<项目名>/backup.sh >> /opt/<项目名>/backups/backup.log 2>&1
+# 前置：宿主机已装 sqlite3（SQLite 在线备份用）
+# 占位符：<项目名> 替换为项目名
+# 对应 references/deployment-guide.md §2/§8（SQLite 在线备份一致性、异地容灾）
+# ============================================================
+
+set -euo pipefail
+
+# ---- 配置区（按项目填写）----
+PROJECT_NAME="<项目名>"
+DATA_DIR="/opt/${PROJECT_NAME}/data"
+BACKUP_DIR="/opt/${PROJECT_NAME}/backups"
+KEEP_N=7                    # 滚动保留最近 N 份（默认 7，可改）
+
+# 若项目用 SQLite，填库文件路径；无则留空。
+# 设计：先 sqlite3 在线备份保证一致性，再打包数据目录。
+SQLITE_DB="${DATA_DIR}/<项目名>.db"
+
+TIMESTAMP=$(date +%Y%m%d-%H%M%S)   # 文件名按时间序，供滚动保留排序
+mkdir -p "${BACKUP_DIR}"
+
+# ---- 1. SQLite 在线备份（库存在才执行）----
+if [ -n "${SQLITE_DB}" ] && [ -f "${SQLITE_DB}" ]; then
+  echo "[backup] SQLite 在线备份（一致性副本）…"
+  sqlite3 "${SQLITE_DB}" ".backup '${BACKUP_DIR}/${PROJECT_NAME}-${TIMESTAMP}.sqlite3'"
+fi
+
+# ---- 2. 打包数据目录 ----
+ARCHIVE="${BACKUP_DIR}/${PROJECT_NAME}-${TIMESTAMP}.tar.gz"
+echo "[backup] 打包数据目录 → ${ARCHIVE}"
+tar -czf "${ARCHIVE}" -C "$(dirname "${DATA_DIR}")" "$(basename "${DATA_DIR}")"
+
+# ---- 3. 滚动保留最近 N 份（时间戳 %Y%m%d-%H%M%S 字典序即时间序）----
+# 每份备份 = 同时间戳的 tar.gz（必有）+ 可选 .sqlite3（SQLite 一致副本）
+count=0
+for f in "${BACKUP_DIR}"/${PROJECT_NAME}-*.tar.gz; do
+  [ -e "$f" ] || continue
+  count=$((count + 1))
+done
+if [ "$count" -gt "$KEEP_N" ]; then
+  del=$((count - KEEP_N))
+  for f in "${BACKUP_DIR}"/${PROJECT_NAME}-*.tar.gz; do
+    [ -e "$f" ] || continue
+    if [ "$del" -gt 0 ]; then
+      rm -f -- "$f"
+      rm -f -- "${f%.tar.gz}.sqlite3"   # 连同同时间戳的 SQLite 一致副本一起删
+      del=$((del - 1))
+    fi
+  done
+fi
+
+echo "[backup] 完成。"
+
+# ---- 可选：同步到对象存储做异地容灾（rclone / ossutil 等）----
+# 例：rclone copy "${ARCHIVE}" "remote:<bucket>/<项目名>/"

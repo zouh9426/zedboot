@@ -1,0 +1,60 @@
+# AGENTS.md
+
+## 项目识别
+
+- 项目名称：
+- 项目代码：
+- 项目模式：
+- 当前正式分支：
+- 管理规范版本：v1.4
+- UI 规范：DESIGN.md（如项目有界面；它是唯一 UI 规范来源，任何 UI 变更走 uiweft 工作流，不绕过）
+- 部署文档：docs/guides/deployment.md（如为可部署项目；含服务器/域名/端口等登记信息）
+- 完整参考版位置：<随项目安装的路径，或注明"未随项目安装，见 ZeroWeave skill 的 references/ 目录">
+
+## 强制阅读顺序
+
+1. AGENTS.md
+2. README.md
+3. docs/project/PROJECT_RULES.md
+4. docs/project/PROJECT_INDEX.md
+5. docs/project/PROJECT_STATE.md
+6. docs/project/TODO.md
+7. 当前任务引用文件
+
+## 项目特有约束
+
+- 
+- 
+
+## 默认跳过
+
+- archive/
+- 依赖目录
+- 构建产物
+- 缓存
+- 日志
+- 大型二进制文件
+- .env 与任何密钥文件（永不读取内容，永不入库）
+
+## 当前写入规则
+
+- 同一时间只有一个当前写入者。
+- 未确认写入权时只做分析。
+- AI 只可将任务推进到待验收。
+
+## 每任务收尾检查（进入待验收前必做）
+
+- 测试、构建或内容检查通过；
+- 无敏感信息误提交；
+- 新增和修改的文件已归入正确目录，命名规范；
+- 根目录无本次产生的临时或错位文件；
+- 被替代的旧文件已删除或归档；
+- TODO、PROJECT_STATE、PROJECT_INDEX 已同步。
+
+## 文档同步
+
+遵循 PROJECT_RULES.md 的更新触发矩阵。
+
+## 交接
+
+交接格式见 PROJECT_RULES.md，不在本文件重复定义。

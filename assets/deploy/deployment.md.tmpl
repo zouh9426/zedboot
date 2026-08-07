@@ -1,0 +1,44 @@
+# 部署说明：<项目名>
+
+> 由 ZeroWeave skill 根据参考规范生成，落地时把表格中所有 `<待填>` 替换为实际值。
+
+## 1. 信息登记（位置与引用）
+
+| 项 | 值 |
+|---|---|
+| 服务器 IP | `<待填>` |
+| SSH 端口 | `<待填>` |
+| 项目账号 | `<待填>` |
+| 部署密钥（服务器端） | `/home/<账号>/.ssh/<项目名>_deploy` |
+| 部署密钥（本地路径） | `<待填>`（如 `~/.ssh/<项目名>_deploy`） |
+| GitHub 仓库 | `<待填>`（私有，仅备份与版本管理） |
+| 域名 | `<待填>` |
+| DNS 托管商 | `<待填>` |
+| 容器端口（本机回环） | `<待填>`（如 `127.0.0.1:3xxx`） |
+| 备份位置 | `/opt/<项目名>/backups/` |
+| 备份保留份数 | `<待填>`（默认 7） |
+| 数据目录 | `/opt/<项目名>/data` |
+
+> 秘密本体（私钥内容、密码、token）**永不写入本文件与 Git**，只存在于服务器 `.env` 与本地。
+
+## 2. 日常运维速查
+
+- **发布（一行命令链）**
+
+  ```bash
+  # 本地：合回 main 后先 push 备份，再 rsync 直推
+  git push && rsync -az --delete --exclude .git --exclude node_modules --exclude .env \
+    --exclude data --exclude backups -e "ssh -i ~/.ssh/<项目名>_deploy" \
+    ./ <账号>@<服务器IP>:/opt/<项目名>/
+  # 服务器：重建并自动迁移
+  cd /opt/<项目名> && docker compose up -d --build
+  ```
+
+- **看日志**：`docker compose logs -f <项目名>`
+- **重启**：`docker compose restart <项目名>`
+- **备份**：crontab 自动执行 `backup.sh`，备份在 `/opt/<项目名>/backups/`，滚动保留 N 份
+- **恢复**：停容器 → 覆盖数据目录（或恢复 SQLite 一致副本）→ 重启
+
+## 3. 原理参考
+
+完整规范见 ZeroWeave skill 的 `references/deployment-guide.md`；本文件由 AI 依据该规范生成。
