@@ -1,0 +1,19 @@
+name: no-private-paths
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Scan for private absolute paths
+        # 只匹配真实私人路径形式（/Users/<名>/），不匹配规则文件中的描述文字
+        run: |
+          if grep -rnE "/Users/[a-zA-Z0-9_-]+/" --exclude-dir=.git .; then
+            echo "::error::检测到私人绝对路径，请改为 ~/ 相对形式或占位符"
+            exit 1
+          fi
+          echo "无私有路径，通过"
