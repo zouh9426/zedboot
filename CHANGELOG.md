@@ -2,6 +2,13 @@
 
 本项目所有值得记录的变更都写在这里。格式约定：每条目回答两个问题——**改了什么**、**为什么这么改（决策理由）**。
 
+## [0.5.1] - 2026-08-11
+
+名字大小写形式统一：skill 名、skill 本体目录、以及全部文档/模板/代码引用由小写形式统一为 zedboot。
+
+- **命名统一**：SKILL.md frontmatter `name:`、skill 本体子目录（`zedboot/`）、references/ 两份规范、assets/ 全部模板、scripts/audit.py 中的代码标识符（如 `zedboot_readiness` 键），以及 README / SETUP 双语、GitHub 仓库路径引用中的原名小写拼写，全部统一为 zedboot 这一大小写形式。理由：用户要求统一大小写形式。
+- **历史条目同步**：CHANGELOG 既有历史条目中的原名小写拼写一并更新为 zedboot，仓库零小写残留。
+
 ## [0.5.0] - 2026-08-11
 
 skill 品牌更名：显示名与 skill 名由原名统一改为 zedboot / `zedboot`，仓库结构与全部引用同步。
