@@ -31,7 +31,7 @@ Give me an "installed / missing" list.
 ## Step 3: Install what is missing
 
 - **zedboot (required)**: `git clone https://github.com/zouh9426/zedboot` into a temporary directory, copy its `zedboot/` **subdirectory** into the skills directory (the repo root is not the skill — the subdirectory is), then delete the temp directory.
-- **zedui (optional)**: if I need the UI system and you didn't find it in step 2, tell me, and optionally install it following the SETUP guide at https://github.com/zouh9426/uiweft; skipping it does not affect the management or deployment systems.
+- **zedui (optional)**: if I need the UI system and you didn't find it in step 2, tell me, and optionally install it following the SETUP guide at https://github.com/zouh9426/zedui; skipping it does not affect the management or deployment systems.
 - Afterwards, verify again by `name:`.
 
 ## Step 4: Self-check

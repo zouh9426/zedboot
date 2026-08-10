@@ -31,7 +31,7 @@
 ## 第 3 步：安装缺失的 skill
 
 - **zedboot（必需）**：`git clone https://github.com/zouh9426/zedboot` 到临时目录，把其中的 `zedboot/` 子目录拷进技能目录（注意：仓库根不是 skill 本体，子目录才是），用完删除临时目录。
-- **zedui（可选）**：如果我需要 UI 体系而你第 2 步没找到，告诉我并可按 https://github.com/zouh9426/uiweft 的 SETUP 指引安装；不装也不影响管理体系与部署体系。
+- **zedui（可选）**：如果我需要 UI 体系而你第 2 步没找到，告诉我并可按 https://github.com/zouh9426/zedui 的 SETUP 指引安装；不装也不影响管理体系与部署体系。
 - 安装后再次按 `name:` 核实。
 
 ## 第 4 步：自检

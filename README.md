@@ -14,7 +14,7 @@ zedboot 是一个**项目开局编排 skill**：它自身不定规则、不做�
 |---|---|---|---|
 | 项目管理 | AI-Ready 项目管理规范 v1.4 | `docs/project/` 五件套 + 入口文件 + `archive/` | 所有项目 |
 | 部署 | 专用账号隔离 + Docker + rsync 直推 + 私有 Git 仓库备份 | Dockerfile 等 + `docs/guides/deployment.md` | 仅可部署代码项目 |
-| UI | [zedui](https://github.com/zouh9426/uiweft) 编排工作流 | `DESIGN.md`（由 zedui 生成） | 仅项目有界面时 |
+| UI | [zedui](https://github.com/zouh9426/zedui) 编排工作流 | `DESIGN.md`（由 zedui 生成） | 仅项目有界面时 |
 
 ## 两条工作流
 
@@ -35,7 +35,7 @@ adopt（旧项目改造）：只读审计 → 差距报告 → 改造方案（�
 ## 前置条件
 
 1. **Python 3**（审计脚本，纯标准库）——adopt 工作流需要
-2. 可选：[zedui](https://github.com/zouh9426/uiweft)（UI 支线；未安装时 UI 之外的功能不受影响）
+2. 可选：[zedui](https://github.com/zouh9426/zedui)（UI 支线；未安装时 UI 之外的功能不受影响）
 3. 可选：`gh` CLI 或 SSH key（GitHub 私有仓库创建/关联；没有则指引一次性配置或允许远程待补）
 
 ## 安装

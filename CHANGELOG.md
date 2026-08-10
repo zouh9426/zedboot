@@ -4,10 +4,10 @@
 
 ## [0.5.2] - 2026-08-11
 
-上游可选 UI 依赖 skill 更名，仓库内引用同步为显示名 zedui / name 匹配随上游 frontmatter 同步为小写形式，GitHub 上游仓库名未改、安装 URL 保持不变。
+上游可选 UI 依赖 skill 更名（显示名 zedui，frontmatter name 为小写形式），随后其 GitHub 仓库也完成更名；仓库内引用与安装 URL 一并同步。
 
 - **引用同步**：SKILL.md、README / SETUP 双语、CHANGELOG 历史条目、assets 模板中的原名拼写按语境更新——正文/显示语境统一为显示名 zedui；SKILL.md 与 SETUP 双语中按 `name:` 字段检测已安装 skill 的表格/自检规则，匹配值同步为与上游 frontmatter 一致的小写形式。理由：上游依赖更名。
-- **URL 保持**：上游仓库名未改，安装指引中的 GitHub URL（https://github.com/zouh9426/uiweft）保持不变。
+- **URL 同步**：上游 GitHub 仓库更名后，README / SETUP 双语与 SKILL.md 中 7 处安装指引 URL 更新为 `https://github.com/zouh9426/zedui`。理由：上游仓库更名，以新地址为准。
 
 ## [0.5.1] - 2026-08-11
 
