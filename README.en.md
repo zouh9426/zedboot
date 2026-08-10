@@ -1,14 +1,14 @@
-# ZeroWeave
+# zedboot
 
-> weave — to interlace. Project management, deployment, and UI are three threads; ZeroWeave weaves them into a project at bootstrap, so you never retrofit them later.
+> weave — to interlace. Project management, deployment, and UI are three threads; zedboot weaves them into a project at bootstrap, so you never retrofit them later.
 
 [中文](README.md) · [Guided-install prompt](SETUP.en.md) · [Changelog](CHANGELOG.md)
 
-ZeroWeave is a **project-bootstrap orchestrator skill**: it defines no rules and does no design itself — it weaves three proven systems into a new project in one pass and registers them with each other, or retrofits an existing project that lacks them until it looks as if they had been there from day one. Then it steps aside: day-to-day discipline lives in the files installed into your project, with no runtime dependency on this skill.
+zedboot is a **project-bootstrap orchestrator skill**: it defines no rules and does no design itself — it weaves three proven systems into a new project in one pass and registers them with each other, or retrofits an existing project that lacks them until it looks as if they had been there from day one. Then it steps aside: day-to-day discipline lives in the files installed into your project, with no runtime dependency on this skill.
 
 Works with any AI coding tool that supports SKILL.md skills (Kimi Code / Claude Code / Codex, etc.).
 
-> Note: ZeroWeave's rulebooks and templates are written in Chinese. The workflows are language-agnostic, but the generated project documents will be in Chinese.
+> Note: zedboot's rulebooks and templates are written in Chinese. The workflows are language-agnostic, but the generated project documents will be in Chinese.
 
 ## The three systems
 
@@ -32,7 +32,7 @@ adopt (retrofit):    read-only audit → gap report → adoption plan (your call
 - **Idempotent install**: every adopt action is "check → merge/archive if present → create if missing"; safe to run twice, safe to do in stages; business code is never touched.
 - **Mechanical audit**: `scripts/audit.py` (stdlib-only, read-only) does the mechanical probing; anything undetectable is marked `unknown` for the AI to judge — no guessing.
 - **Git discipline**: one private repo per project; local commits as usual, pushes bound to releases/deliveries only; tags are created after deployment and live verification.
-- **No UI overreach**: the UI track is delegated to uiweft; if it is missing, ZeroWeave says so and pauses only that track.
+- **No UI overreach**: the UI track is delegated to uiweft; if it is missing, zedboot says so and pauses only that track.
 
 ## Requirements
 
@@ -44,20 +44,20 @@ adopt (retrofit):    read-only audit → gap report → adoption plan (your call
 
 **Recommended (let your AI do it)**: open [SETUP.en.md](SETUP.en.md) and paste its full content to your AI agent — it will detect the environment, install the skill, and self-check.
 
-**Manual**: copy this repo's `zeroweave/` subdirectory into your AI tool's skills directory (e.g. `~/.agents/skills/`, `~/.claude/skills/`, `~/.kimi-code/skills/`, `~/.codex/skills/`). Skills recognize each other by the frontmatter `name:` field — directory names and tools don't matter.
+**Manual**: copy this repo's `zedboot/` subdirectory into your AI tool's skills directory (e.g. `~/.agents/skills/`, `~/.claude/skills/`, `~/.kimi-code/skills/`, `~/.codex/skills/`). Skills recognize each other by the frontmatter `name:` field — directory names and tools don't matter.
 
 ## Usage
 
 Once installed, say something like this to your AI in your project:
 
-> "Initialize this project from scratch with ZeroWeave" / "Retrofit this old project with ZeroWeave"
+> "Initialize this project from scratch with zedboot" / "Retrofit this old project with zedboot"
 
 `init` asks the six info groups once ("TBD" is fine); `adopt` audits read-only and presents an adoption plan first — **nothing happens until you approve it**.
 
 ## Repository structure
 
 ```
-zeroweave/                    ← the skill itself (this is what you copy)
+zedboot/                    ← the skill itself (this is what you copy)
 ├── SKILL.md                  ← orchestration: mode detection, info collection, two workflows
 ├── references/               ← rulebooks (management rules compact/reference, deployment guide)
 ├── assets/

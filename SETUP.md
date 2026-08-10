@@ -1,11 +1,11 @@
-# ZeroWeave 安装引导提示词
+# zedboot 安装引导提示词
 
 > **用法**：把本文件**全部内容**（从下面分隔线开始）复制贴给你的 AI agent（Kimi Code / Claude Code / Codex 等均可），它会自动完成全套安装与自检。
 > English version: [SETUP.en.md](SETUP.en.md)
 
 ---
 
-你是安装助手。请帮我安装 **ZeroWeave**（项目开局编排 skill）。按以下步骤执行，每步完成后告诉我结果；任何一步失败，停下来报告，不要跳过。
+你是安装助手。请帮我安装 **zedboot**（项目开局编排 skill）。按以下步骤执行，每步完成后告诉我结果；任何一步失败，停下来报告，不要跳过。
 
 ## 第 1 步：识别环境
 
@@ -23,14 +23,14 @@
 
 | skill 名 | 作用 | 必需性 |
 |---|---|---|
-| `zeroweave` | 编排层本体 | 必需 |
+| `zedboot` | 编排层本体 | 必需 |
 | `uiweft` | UI 支线（生成 DESIGN.md） | 可选 |
 
 列出"已有 / 缺失"清单给我。
 
 ## 第 3 步：安装缺失的 skill
 
-- **zeroweave（必需）**：`git clone https://github.com/zouh9426/zeroweave` 到临时目录，把其中的 `zeroweave/` 子目录拷进技能目录（注意：仓库根不是 skill 本体，子目录才是），用完删除临时目录。
+- **zedboot（必需）**：`git clone https://github.com/zouh9426/zedboot` 到临时目录，把其中的 `zedboot/` 子目录拷进技能目录（注意：仓库根不是 skill 本体，子目录才是），用完删除临时目录。
 - **uiweft（可选）**：如果我需要 UI 体系而你第 2 步没找到，告诉我并可按 https://github.com/zouh9426/uiweft 的 SETUP 指引安装；不装也不影响管理体系与部署体系。
 - 安装后再次按 `name:` 核实。
 
@@ -38,9 +38,9 @@
 
 依次运行（路径用第 2/3 步解析出的实际位置）：
 
-1. 读 `<zeroweave>/SKILL.md`，确认 frontmatter 可解析（有 `name:` 和 `description:`）。
-2. `python3 <zeroweave>/scripts/audit.py --help` —— 应输出用法说明；再对一个真实目录试跑一次，应输出结构化审计报告而非报错。
+1. 读 `<zedboot>/SKILL.md`，确认 frontmatter 可解析（有 `name:` 和 `description:`）。
+2. `python3 <zedboot>/scripts/audit.py --help` —— 应输出用法说明；再对一个真实目录试跑一次，应输出结构化审计报告而非报错。
 
-两项全过后，向我汇报：zeroweave 的安装路径、uiweft 检测结果、以及一句确认——"ZeroWeave 安装完成，对你的项目说『用 ZeroWeave 从零初始化这个项目』或『用 ZeroWeave 改造这个旧项目』即可开始"。
+两项全过后，向我汇报：zedboot 的安装路径、uiweft 检测结果、以及一句确认——"zedboot 安装完成，对你的项目说『用 zedboot 从零初始化这个项目』或『用 zedboot 改造这个旧项目』即可开始"。
 
 ---

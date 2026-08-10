@@ -1,11 +1,11 @@
-# AGENTS.md — ZeroWeave 项目级规则
+# AGENTS.md — zedboot 项目级规则
 
-本文件约束**本仓库的维护者 agent**（迭代 zeroweave skill 本身时的纪律）。`zeroweave/SKILL.md` 约束的是**使用方 agent**（在用户项目里跑开局/改造工作流时的行为），两者别混。
+本文件约束**本仓库的维护者 agent**（迭代 zedboot skill 本身时的纪律）。`zedboot/SKILL.md` 约束的是**使用方 agent**（在用户项目里跑开局/改造工作流时的行为），两者别混。
 
 ## 仓库性质
 
-- 公开开源仓库（GitHub: `zeroweave`），MIT 协议，Copyright (c) 2026 zouh9426。
-- 仓库内容：`zeroweave/`（skill 本体：SKILL.md + references/ + assets/ + scripts/）、双语文档（README / SETUP）、CHANGELOG、LICENSE、CI。
+- 公开开源仓库（GitHub: `zedboot`），MIT 协议，Copyright (c) 2026 zouh9426。
+- 仓库内容：`zedboot/`（skill 本体：SKILL.md + references/ + assets/ + scripts/）、双语文档（README / SETUP）、CHANGELOG、LICENSE、CI。
 - 面向所有 AI 编码工具（Kimi Code / Claude Code / Codex 等），**不得偏向任何单一工具**：skill 内部不写死任何工具的安装路径，运行时按「环境探测」规则解析。
 
 ## 红线
@@ -27,8 +27,8 @@
 
 ## 本机部署位提醒（仅维护者本机适用，不进任何仓库文件）
 
-`~/.kimi-code/skills/zeroweave/` 是**真实目录不是软链接**（加载器不跟随符号链接）。改完仓库源码后，必须手动同步才在本机生效：
+`~/.kimi-code/skills/zedboot/` 是**真实目录不是软链接**（加载器不跟随符号链接）。改完仓库源码后，必须手动同步才在本机生效：
 
 ```bash
-rsync -a --delete zeroweave/ ~/.kimi-code/skills/zeroweave/
+rsync -a --delete zedboot/ ~/.kimi-code/skills/zedboot/
 ```

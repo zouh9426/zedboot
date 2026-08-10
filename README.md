@@ -1,10 +1,10 @@
-# ZeroWeave
+# zedboot
 
-> weave = 编织。项目管理、部署、UI 三套体系是三条线——ZeroWeave 在项目开局把它们一次织好，日后不返工。
+> weave = 编织。项目管理、部署、UI 三套体系是三条线——zedboot 在项目开局把它们一次织好，日后不返工。
 
 [English](README.en.md) · [安装引导提示词](SETUP.md) · [更新日志](CHANGELOG.md)
 
-ZeroWeave 是一个**项目开局编排 skill**：它自身不定规则、不做设计，而是在新项目从零创建时把三套成熟体系一次性织进项目并让它们互相登记、形成闭环；也能把缺体系的旧项目改造成"从一开始就装好"的状态。装完即退场——项目的日常约束由装进项目的文件承担，不留下对本 skill 的运行时依赖。
+zedboot 是一个**项目开局编排 skill**：它自身不定规则、不做设计，而是在新项目从零创建时把三套成熟体系一次性织进项目并让它们互相登记、形成闭环；也能把缺体系的旧项目改造成"从一开始就装好"的状态。装完即退场——项目的日常约束由装进项目的文件承担，不留下对本 skill 的运行时依赖。
 
 适用于所有支持 SKILL.md 技能的 AI 编码工具（Kimi Code / Claude Code / Codex 等）。
 
@@ -42,20 +42,20 @@ adopt（旧项目改造）：只读审计 → 差距报告 → 改造方案（�
 
 **推荐方式（AI 代办）**：打开 [SETUP.md](SETUP.md)，把全文贴给你的 AI agent，它会自动识别环境、安装 skill 并自检。
 
-**手动方式**：把本仓库的 `zeroweave/` 子目录拷进你的 AI 工具的技能目录（如 `~/.agents/skills/`、`~/.claude/skills/`、`~/.kimi-code/skills/`、`~/.codex/skills/`）。skill 之间按 frontmatter 的 `name:` 互相识别，不挑目录名、不挑工具。
+**手动方式**：把本仓库的 `zedboot/` 子目录拷进你的 AI 工具的技能目录（如 `~/.agents/skills/`、`~/.claude/skills/`、`~/.kimi-code/skills/`、`~/.codex/skills/`）。skill 之间按 frontmatter 的 `name:` 互相识别，不挑目录名、不挑工具。
 
 ## 使用
 
 装好后，在你的项目里对 AI 说一句类似的话即可触发：
 
-> "用 ZeroWeave 从零初始化这个项目" / "用 ZeroWeave 改造这个旧项目"
+> "用 zedboot 从零初始化这个项目" / "用 zedboot 改造这个旧项目"
 
 init 会先一次性问齐六组信息（可答"待定"）；adopt 会先只读审计、出改造方案，**你批准后才动手**。
 
 ## 仓库结构
 
 ```
-zeroweave/                    ← skill 本体（拷进技能目录的就是它）
+zedboot/                    ← skill 本体（拷进技能目录的就是它）
 ├── SKILL.md                  ← 编排逻辑：模式判断、信息采集、两条工作流
 ├── references/               ← 规范正文（管理规范精简版/完整参考版、部署规范）
 ├── assets/

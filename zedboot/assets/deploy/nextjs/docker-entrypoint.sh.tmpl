@@ -1,0 +1,14 @@
+#!/bin/sh
+# ============================================================
+# 容器启动入口（zedboot skill 模板，落地为项目根目录 docker-entrypoint.sh）
+# 与同目录 Dockerfile.tmpl 配套使用。
+# 设计点：set -e + 先迁移后启动 + exec 成为 PID 1（deployment-guide.md §3）
+# ============================================================
+set -e
+
+# 容器启动入口：先确保数据目录存在、执行数据库迁移，再启动服务
+mkdir -p /app/data/uploads
+echo "[entrypoint] 执行数据库迁移…"
+node /app/cli/node_modules/prisma/build/index.js migrate deploy   # 栈相关：换成你的迁移命令
+echo "[entrypoint] 启动服务…"
+exec node server.js

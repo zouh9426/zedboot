@@ -2,6 +2,14 @@
 
 本项目所有值得记录的变更都写在这里。格式约定：每条目回答两个问题——**改了什么**、**为什么这么改（决策理由）**。
 
+## [0.5.0] - 2026-08-11
+
+skill 品牌更名：显示名与 skill 名由原名统一改为 zedboot / `zedboot`，仓库结构与全部引用同步。
+
+- **skill 改名**：SKILL.md frontmatter `name:` 与显示名更新为 `zedboot` / zedboot，SKILL.md、references/ 两份规范、assets/ 全部模板、scripts/audit.py 中的名称引用同步。理由：品牌更名。
+- **目录改名**：skill 本体子目录更名为 `zedboot/`。理由：品牌更名。
+- **门面与仓库引用同步**：README / SETUP 双语、AGENTS.md、CHANGELOG 历史条目、GitHub 仓库路径引用中的名称与路径一并更新。理由：品牌更名后全仓库命名保持一致。
+
 ## [0.4.0] - 2026-08-11
 
 新增「每任务收尾自检」机制：自检从"用户提醒才做"变为流程默认动作。
@@ -31,7 +39,7 @@
 
 开源发布 + 工具无关化。
 
-- **skill 负载移入 `zeroweave/` 子目录**：仓库根只留门面粉件（README/SETUP/CHANGELOG/AGENTS/LICENSE/CI），skill 本体（SKILL.md + references/ + assets/ + scripts/）独立成目录。理由：clone 下来的仓库不等于可直接加载的 skill 目录，门面与负载分离后结构清晰，也避免仓库级文件被误拷进技能目录。
+- **skill 负载移入 `zedboot/` 子目录**：仓库根只留门面粉件（README/SETUP/CHANGELOG/AGENTS/LICENSE/CI），skill 本体（SKILL.md + references/ + assets/ + scripts/）独立成目录。理由：clone 下来的仓库不等于可直接加载的 skill 目录，门面与负载分离后结构清晰，也避免仓库级文件被误拷进技能目录。
 - **SKILL.md 新增「环境探测」一节**：候选技能目录覆盖 `~/.agents/skills/`、`~/.kimi-code/skills/`、`~/.claude/skills/`、`~/.codex/skills/` 及项目级目录；skill 之间**按 frontmatter 的 `name:` 字段互相识别**，不按目录名；自身路径也由 name 解析。理由：面向所有支持 SKILL.md 的工具（Kimi Code / Claude Code / Codex 等），路径硬编码等于私有；目录名与 skill 名可能不一致，必须按名解析。
 - **新增 README.md（中文主门面）/ README.en.md**：三套体系、两条工作流、核心设计决策、前置条件、安装与触发方式、仓库结构。理由：开源门面；中文为主是因为目标用户群是中文用户。
 - **新增 SETUP.md / SETUP.en.md 安装引导提示词**：用户贴给自己的 AI agent 即可完成环境识别、按名查重、安装与自检。理由：安装涉及"仓库根 ≠ skill 目录"的细节，让 AI 代办最不容易错。

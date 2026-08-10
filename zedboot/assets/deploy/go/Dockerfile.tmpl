@@ -1,0 +1,37 @@
+# ============================================================
+# Go 通用生产 Dockerfile（多阶段，zedboot skill 模板）
+#
+# 用法：
+#   - 本模板落地为项目根目录的 `Dockerfile`，替换占位符 `<项目名>`
+#   - 配套 `assets/deploy/docker-compose.yml.tmpl`（容器端口改 8080）
+#   - 假设：go.mod + go.sum
+#
+# 说明：Go 项目通常无外部迁移工具；若有数据库迁移，在 entrypoint 或
+#       应用启动时处理（而非镜像内单独装迁移 CLI）。
+# 数据目录权限：宿主机 ./data 需可被容器用户写入（distroless:nonroot 为 uid 65532）。
+# 设计点对应 references/deployment-guide.md §3。
+# ============================================================
+
+# ---- 阶段 1: builder（编译）----
+FROM golang:1.22-alpine AS builder
+WORKDIR /src
+# 先拷依赖清单再下载，依赖未变化时命中构建缓存
+COPY go.mod go.sum ./
+RUN go mod download
+COPY . .
+# 静态编译：CGO_ENABLED=0，纯静态二进制，可跑在最小镜像上
+RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/<项目名> ./...
+
+# ---- 阶段 2: runner（最小运行时）----
+# 二选一：
+#   - gcr.io/distroless/static-debian12:nonroot：更小更安全（uid 65532，本身即非 root），无 shell、不便 exec 调试
+#   - alpine：带 shell 方便排查，体积略大；若用 alpine 需自行加 `USER 65532:65532` 或建非 root 用户
+FROM gcr.io/distroless/static-debian12:nonroot
+WORKDIR /app
+COPY --from=builder /out/<项目名> /app/<项目名>
+
+# 数据目录：数据库 / 上传文件持久化（compose 绑定挂载 ./data:/app/data）
+VOLUME /app/data
+
+EXPOSE 8080
+ENTRYPOINT ["/app/<项目名>"]
