@@ -8,7 +8,8 @@ ZeroWeave 只读审计工具 (audit.py)
 ----
 ZeroWeave 在「改造旧项目」流程中使用的机械式只读审计探测器。
 按固定清单探测项目的：基本信息 / 技术栈 / git 状态 / 管理文档 /
-部署痕迹 / UI 特征 / 根目录卫生 / ZeroWeave 就绪度，输出结构化结果，
+部署痕迹 / UI 特征 / 根目录卫生 / 入库文件隐私 / ZeroWeave 就绪度，
+输出结构化结果，
 只做事实统计，不做主观判断与建议（差距分析交给 AI）。
 
 用法
@@ -109,6 +110,7 @@ SECTION_LABELS = {
     "deploy_traces": "部署痕迹",
     "ui": "UI",
     "root_hygiene": "根目录卫生",
+    "committed_secrets": "入库文件隐私泄露",
     "zeroweave_readiness": "ZeroWeave 就绪度",
 }
 
@@ -798,11 +800,154 @@ def detect_readiness(management_result, deploy_result):
     }
 
 
+# ---------------------------------------------------------------------------
+# 9. 入库文件隐私泄露（git 跟踪的文本文件中是否含运维真实值）
+# ---------------------------------------------------------------------------
+_SCAN_FILE_LIMIT = 2 * 1024 * 1024  # 单文件扫描上限：只读前 2MB，防大文件卡死
+_TEXT_HEAD = 4096                   # 二进制判定：头部含 NUL 字节视为二进制
+
+_IPV4_RE = re.compile(r"\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}(?![\d.])")
+# 本机绝对路径：/Users/ 或 /home/ 下的具体名字段；
+# < 或 > 开头的占位符段（如 /home/<账号>）不匹配，避免误报
+_LOCAL_PATH_RE = re.compile(r"/(?:Users|home)/([^/\s<>\x00]+)")
+_PRIVATE_KEY_RE = re.compile(r"-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----")
+
+_PRIVACY_TYPE_LABELS = {
+    "ip": "疑似公网 IPv4",
+    "local_path": "本机绝对路径",
+    "private_key": "私钥格式头",
+    "docs_private_tracked": "docs/private/ 文件被 git 跟踪",
+}
+
+
+def _is_public_ipv4(ip):
+    """IPv4 是否属公网（排除 0.0.0.0 / 回环 / 三类私网）。"""
+    parts = ip.split(".")
+    if len(parts) != 4:
+        return False
+    try:
+        a, b, c, d = (int(x) for x in parts)
+    except ValueError:
+        return False
+    if any(x > 255 for x in (a, b, c, d)):
+        return False
+    if ip == "0.0.0.0":
+        return False
+    if a == 127:                       # 127.0.0.0/8 回环
+        return False
+    if a == 10:                        # 10.0.0.0/8 私网
+        return False
+    if a == 172 and 16 <= b <= 31:     # 172.16.0.0/12 私网
+        return False
+    if a == 192 and b == 168:          # 192.168.0.0/16 私网
+        return False
+    return True
+
+
+def _read_text_head(path, limit):
+    """读文本文件头部：先读 4KB 判二进制（含 NUL 视为二进制跳过），
+    文本则读满 limit 字节并以 UTF-8 解码（无效字节替换为 U+FFFD，绝不抛异常）。
+    不可读 / 二进制返回 None。
+    注：必须按 UTF-8 解码而非 latin-1，否则 UTF-8 续字节 0x85 等会被
+    splitlines() 误判为换行，导致行号错乱。"""
+    try:
+        with open(path, "rb") as f:
+            head = f.read(_TEXT_HEAD)
+    except OSError:
+        return None
+    if b"\x00" in head:
+        return None
+    try:
+        with open(path, "rb") as f:
+            raw = f.read(limit)
+    except OSError:
+        return None
+    return raw.decode("utf-8", "replace")
+
+
+def _scan_text_privacy_hits(text):
+    """扫描文本内容，返回 {命中类型: [行号...]}（每行每类只计一次）。"""
+    hits = {}
+    for lineno, line in enumerate(text.splitlines(), 1):
+        if _PRIVATE_KEY_RE.search(line):
+            hits.setdefault("private_key", []).append(lineno)
+        if _LOCAL_PATH_RE.search(line):
+            hits.setdefault("local_path", []).append(lineno)
+        if any(_is_public_ipv4(m.group(0)) for m in _IPV4_RE.finditer(line)):
+            hits.setdefault("ip", []).append(lineno)
+    return hits
+
+
+def detect_committed_secrets(root):
+    """检查 git 跟踪的文本文件是否含：公网 IPv4 / 本机绝对路径 / 私钥格式头。
+    绝对只读：仅执行 git ls-files 与读文件内容，不修改被审计项目。
+    跳过 .env（已有专项检查）与 .gitignore；docs/private/ 下文件被跟踪本身即风险，
+    单独列项，不扫其内容。"""
+    data = {
+        "status": "unknown",
+        "risk_found": False,
+        "risk_items": [],
+        "scanned_count": None,
+        "unknown_notes": [],
+    }
+    ok, out, err, note = _run_git(root, ["ls-files"])
+    if note is not None:
+        # git 不可用 / 命令超时：整体 unknown
+        data["status"] = "git_error"
+        data["unknown_notes"].append(note)
+        return data
+    if not ok:
+        # git 正常执行但 ls-files 失败：视为非仓库（无跟踪文件概念）
+        data["status"] = "not_repo"
+        data["scanned_count"] = 0
+        if err and "not a git repository" not in err.lower():
+            data["unknown_notes"].append(
+                "git ls-files 执行失败，交由 AI 判断：%s" % _clean(err or "无错误输出"))
+        return data
+
+    data["status"] = "repo"
+    files = [l.strip() for l in out.splitlines() if l.strip()]
+    data["scanned_count"] = len(files)
+
+    for rel in files:
+        base = os.path.basename(rel)
+        if base == ".env" or base == ".gitignore":
+            continue  # .env 已有专项检查；.gitignore 本就应被跟踪，不扫内容
+        if rel.lower().startswith("docs/private/"):
+            # 理论上不该被跟踪：被跟踪本身即风险项，不做内容扫描
+            data["risk_items"].append({
+                "file": _clean(rel),
+                "type": "docs_private_tracked",
+                "type_label": _PRIVACY_TYPE_LABELS["docs_private_tracked"],
+                "count": 1,
+                "lines": None,
+            })
+            data["risk_found"] = True
+            continue
+        text = _read_text_head(os.path.join(root, rel), _SCAN_FILE_LIMIT)
+        if text is None:
+            continue  # 不可读或二进制，跳过
+        hits = _scan_text_privacy_hits(text)
+        for htype, lines in hits.items():
+            data["risk_items"].append({
+                "file": _clean(rel),
+                "type": htype,
+                "type_label": _PRIVACY_TYPE_LABELS[htype],
+                "count": len(lines),
+                "lines": lines[:20],
+            })
+            data["risk_found"] = True
+
+    data["risk_items"].sort(key=lambda x: (x["file"], x["type"]))
+    return data
+
+
 def run_audit(root):
     results = {}
     results["basic"] = detect_basic(root)
     results["framework"] = detect_framework(root)
     results["git"] = detect_git(root)
+    results["committed_secrets"] = detect_committed_secrets(root)
     results["management_docs"] = detect_management_docs(root)
     results["deploy_traces"] = detect_deploy_traces(root)
     results["ui"] = detect_ui(root)
@@ -1040,6 +1185,30 @@ def render_text(results, root, ts):
              % ("是" if rd["has_full_management_five_piece"] else "否"))
     L.append("")
 
+    # 9. 入库文件隐私泄露
+    cs = results["committed_secrets"]
+    L.append("## 9. 入库文件隐私泄露 (committed_secrets)")
+    if cs["status"] == "git_error":
+        note = (cs.get("unknown_notes") or ["无法探测"])[0]
+        L.append("- 扫描: %s" % _unknown_str(note))
+    elif cs["status"] == "not_repo":
+        L.append("- 非 git 仓库，无入库文件概念，跳过")
+    elif cs["risk_found"]:
+        L.append("- 风险: [有]")
+        for item in cs["risk_items"]:
+            if item["lines"]:
+                loc = "，命中 %d 行，行号 %s" % (
+                    item["count"], ", ".join(str(x) for x in item["lines"]))
+                if item["count"] > len(item["lines"]):
+                    loc += " 等共 %d 行" % item["count"]
+            else:
+                loc = ""
+            L.append("- ⚠ %s: %s%s" % (item["type_label"], item["file"], loc))
+    else:
+        L.append("- 风险: [无]（共 %d 个 git 跟踪文件，未发现命中）"
+                 % (cs["scanned_count"] or 0))
+    L.append("")
+
     # 未能探测汇总
     L.append("## 未能探测（交由 AI 判断）")
     unknown = _collect_unknown(results)
@@ -1086,8 +1255,9 @@ def main(argv=None):
     parser = argparse.ArgumentParser(
         prog="audit.py",
         description="ZeroWeave 只读审计工具：机械探测旧项目的技术栈 / git / "
-                    "管理文档 / 部署痕迹 / UI / 根目录卫生，只做事实统计，"
-                    "不做主观判断（差距分析交给 AI）。绝对只读，不写任何东西。",
+                    "管理文档 / 部署痕迹 / UI / 根目录卫生 / 入库文件隐私，"
+                    "只做事实统计，不做主观判断（差距分析交给 AI）。"
+                    "绝对只读，不写任何东西。",
         epilog="示例: python3 audit.py /path/to/project --json",
     )
     parser.add_argument("path", nargs="?", default=None,

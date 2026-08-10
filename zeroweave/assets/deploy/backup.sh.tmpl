@@ -1,24 +1,25 @@
 #!/bin/bash
 # ============================================================
 # 项目备份脚本（ZeroWeave skill 模板）
-# 部署：归属项目账号，加入其 crontab，例如：
-#   30 3 * * * /opt/<项目名>/backup.sh >> /opt/<项目名>/backups/backup.log 2>&1
+# 部署：归属项目账号，加入其 crontab。真实调度时间与日志路径属不可推导
+#   运维值，写入本地 docs/private/ops.md（不入库），脚本与入库文档只写占位符：
+#   <分> <时> * * * <项目目录>/backup.sh >> <项目目录>/backups/backup.log 2>&1
 # 前置：宿主机已装 sqlite3（SQLite 在线备份用）
-# 占位符：<项目名> 替换为项目名
 # 对应 references/deployment-guide.md §2/§8（SQLite 在线备份一致性、异地容灾）
 # ============================================================
 
 set -euo pipefail
 
-# ---- 配置区（按项目填写）----
-PROJECT_NAME="<项目名>"
-DATA_DIR="/opt/${PROJECT_NAME}/data"
-BACKUP_DIR="/opt/${PROJECT_NAME}/backups"
+# ---- 路径自推导（脚本落盘在项目根目录，项目目录由脚本自身位置推出，不写死真实路径）----
+PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_NAME="$(basename "${PROJECT_DIR}")"
+DATA_DIR="${PROJECT_DIR}/data"
+BACKUP_DIR="${PROJECT_DIR}/backups"
 KEEP_N=7                    # 滚动保留最近 N 份（默认 7，可改）
 
-# 若项目用 SQLite，填库文件路径；无则留空。
+# 若项目用 SQLite，确认库文件名与实际一致；无 SQLite 则留空。
 # 设计：先 sqlite3 在线备份保证一致性，再打包数据目录。
-SQLITE_DB="${DATA_DIR}/<项目名>.db"
+SQLITE_DB="${DATA_DIR}/${PROJECT_NAME}.db"
 
 TIMESTAMP=$(date +%Y%m%d-%H%M%S)   # 文件名按时间序，供滚动保留排序
 mkdir -p "${BACKUP_DIR}"

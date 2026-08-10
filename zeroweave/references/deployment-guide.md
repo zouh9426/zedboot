@@ -1,8 +1,8 @@
 # 项目部署体系规范
 
-> 本文件为 ZeroWeave skill 的参考规范；项目落地时由 AI 据此生成项目内 `docs/guides/deployment.md`（填入实际值）。
+> 本文件为 ZeroWeave skill 的参考规范；项目落地时由 AI 据此生成项目内 `docs/guides/deployment.md`（入库文件只写占位符，真实运维值存本地 `docs/private/ops.md`，见 §6）。
 > 适用范围：单台云服务器上共机运行多个小型项目的部署规范。三层结构：**专用账号隔离 + Docker 容器化 + Git 工作流**。
-> 文中 `<项目名>`、`<域名>`、`<端口>`、`<账号>`、`<服务器IP>` 为占位符，使用时替换为实际值。
+> 文中 `<项目名>`、`<域名>`、`<端口>`、`<账号>` 为可推导/业务占位符，落地时直接填实入库；`<PRODUCTION_SERVER_IP>`、`<DEPLOY_KEY>` 等英文大写占位符为隔离运维值，真实值写入 `docs/private/ops.md` 而非入库文档。
 
 ## 1. 体系概览
 
@@ -86,8 +86,8 @@ sudo -u <账号> cp /home/<账号>/.ssh/<项目名>_deploy.pub /home/<账号>/.s
 rsync -az --delete \
   --exclude .git --exclude node_modules --exclude .env \
   --exclude data --exclude backups \
-  -e "ssh -i ~/.ssh/<项目名>_deploy" \
-  ./ <账号>@<服务器IP>:/opt/<项目名>/
+  -e "ssh -i ~/.ssh/<DEPLOY_KEY>" \
+  ./ <DEPLOY_USER>@<PRODUCTION_SERVER_IP>:/opt/<项目名>/
 ```
 
 > 要点：`--delete` 保证服务器目录与本地精确一致；排除项必须包含 `.env`、`data/`、`backups/`，否则一次部署就会覆盖线上密钥和数据。
@@ -125,10 +125,10 @@ rsync -az --delete \
 
 ## 6. 信息登记与秘密边界
 
-**信息登记**（「位置与引用」类信息）：服务器 IP、SSH 端口、项目账号、部署密钥路径、域名、DNS 托管商、容器端口、备份位置与保留份数。这些信息登记进：
+**信息登记**（「位置与引用」类信息）分两层：
 
-- 项目 `docs/project/PROJECT_INDEX.md` 的外部资源表
-- 项目内 `docs/guides/deployment.md`（骨架模板见 `assets/deploy/deployment.md.tmpl`）
+- **可推导值可入库**：项目账号（默认 = 项目名）、应用/数据/备份目录（`/opt/<项目名>` 系）、默认密钥路径约定（`~/.ssh/<项目名>_deploy`）——登记进项目 `docs/project/PROJECT_INDEX.md` 的外部资源表与 `docs/guides/deployment.md`（骨架模板见 `assets/deploy/deployment.md.tmpl`）。域名、DNS 托管商与公开联系邮箱属公开信息，默认同样入库。
+- **不可推导值必须隔离**：服务器 IP、SSH 端口、密钥真实路径（偏离默认约定时）、SSH 别名、crontab 具体调度、备份策略细节——只写入本地 `docs/private/ops.md`（`.gitignore` 排除，永不入库，需配独立私有备份通道）；入库文档对应位置只写占位符（`<PRODUCTION_SERVER_IP>`、`<DEPLOY_USER>` 等）+ 指向 ops.md 的注记。容器端口分配可入库（本机回环端口不构成基础设施指纹）。
 
 **秘密边界**：秘密本体（私钥内容、密码、token）**永不进 Git**，只存在于服务器 `.env` 与用户本地。`.env.example` 入库仅作为结构模板，不带任何真实值。
 

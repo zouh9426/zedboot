@@ -2,6 +2,23 @@
 
 本项目所有值得记录的变更都写在这里。格式约定：每条目回答两个问题——**改了什么**、**为什么这么改（决策理由）**。
 
+## [0.3.0] - 2026-08-11
+
+隐私线升级：运维真实值移出入库文件，项目随时可转 Public。
+
+- **SKILL.md「存储纪律」改写为四层隐私线**：可推导值（账号 = 项目名、`/opt/<项目名>`、默认密钥路径约定）可入库；不可推导值（服务器 IP、SSH 端口、密钥真实路径、SSH 别名、crontab 具体调度、备份策略细节）只存本地 `docs/private/ops.md`（gitignore，永不入库），入库文档只写占位符（`<PRODUCTION_SERVER_IP>` 等）+ 指向 ops.md 的注记；秘密本体永不入库（原纪律保留）；域名与公开联系邮箱默认保留。理由：全账号隐私审计发现旧纪律把完整基础设施指纹写进 PROJECT_INDEX/deployment.md 等入库文件，项目转 Public 即泄露。
+- **新增 `assets/project/ops.md.tmpl`**：init/adopt 安装时生成 `docs/private/ops.md` 模板；`.gitignore` 必须含 `docs/private/`；SKILL.md 提醒用户 ops.md 不进 Git、需配独立私有备份通道（如私有 ops-notes 仓库）。
+- **部署模板改造**：`deployment.md.tmpl`、`PROJECT_INDEX.md.tmpl` 外部资源表改为占位符 + ops.md 注记；`backup.sh.tmpl` 改为 `PROJECT_DIR` 脚本位置自推导、crontab 具体调度移出脚本体；两个 `deploy-rsync` 模板加隐私线注记；`go-live-checklist.md` 占位符说明同步（真实运维值不入清单）。理由：入库文件只留可推导约定值，真实值不落地。
+- **`AGENTS.md.tmpl` 新增常驻规则**：运维真实值统一存 `docs/private/`、入库只写占位符、禁止密钥/IP/本机绝对路径入库。
+- **audit.py 新增第 9 节「入库文件隐私泄露」检查**：扫描 git 跟踪文件中的疑似公网 IPv4、本机绝对路径（`/Users/`、`/home/`，占位符除外）、私钥格式头，以及 `docs/private/` 文件被跟踪的风险；命中列入审计报告风险项。理由：adopt 改造时机械发现存量泄露，不靠人工翻。
+- **新增「转 Public」指引**：Private → Public 前必须先清理 Git 历史中的运维真实值（filter-repo 或重建仓库）；配套 pre-push 闸门见下条，本机全局 hooksPath 闸门可与其共存兜底。
+- **占位符词汇统一约定**：隔离运维值用英文大写占位符（`<PRODUCTION_SERVER_IP>` 等，与 shell 环境变量同形），可推导/业务值用中文语义词（`<项目名>`、`<域名>`）——占位符本身即标明该不该入库；存量项目后续按此对齐。
+- **rsync 部署模板改环境变量覆盖**：`deploy-rsync.sh.tmpl` / `deploy-rsync-static.sh.tmpl` 的账号、密钥路径默认值直接由项目名推导，服务器 IP 经 `PRODUCTION_SERVER_IP` 环境变量传入（未传则报错退出），脚本本体永远保持占位符、永远可提交。理由：消除"填真实值才能跑"导致的脏工作树与误提交风险。
+- **Git 初始化/`.gitignore`/pre-push 闸门下沉到管理体系步骤**：这三条原来挂在「装部署体系」内，"服务器待定暂缓部署"或"无部署但用 Git"的项目会漏掉 Git 初始化、`.gitignore` 纪律与 hook 安装（Phase 0.B 甚至可能已建远程仓库而本地无人 init）。现归入「装管理体系（所有模式）」，按"启用 Git"条件执行。依据：无服务器场景流程推演发现的结构性缺口。
+- **依赖自检新增 Git 本体探测**：`git --version` 不可用时引导安装或登记"暂不启用 Git"（相关步骤整组跳过 + TODO 待补），与 uiweft 缺失的降级风格一致。理由：原自检只探测 GitHub 认证，git 命令本身缺失时流程无降级路径。
+- **新增 pre-push 隐私闸门（`assets/hooks/pre-push.tmpl`）**：自包含 bash，装进项目 `.git/hooks/pre-push`，扫描本次推送新增行，拦截私钥格式头、本机绝对路径、公网 IPv4（排除私网与 RFC 5737 文档段）；宁漏勿滥、误报可 `--no-verify`；init/adopt 幂等安装。理由：存储纪律（不该入库）与 audit.py（改造时发现存量）之外，补上日常防新增泄露的第三道防线。设计上不触碰 `core.hooksPath`（与本机全局闸门共存、互不覆盖），hook 不调用 audit.py（装完即退场，不留对 Skill 路径的运行时依赖）。
+- **一致性同步**：`references/deployment-guide.md` §6 信息登记分两层改写；`README.md`/`README.en.md` 双语同步；`audit-report.md.tmpl` 风险项补充。
+
 ## [0.2.0] - 2026-08-07
 
 开源发布 + 工具无关化。

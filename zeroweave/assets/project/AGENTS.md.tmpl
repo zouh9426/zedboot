@@ -23,7 +23,8 @@
 
 ## 项目特有约束
 
-- 
+- 运维/部署真实值（服务器 IP、SSH 端口、密钥路径、crontab 调度等）统一存本地 `docs/private/`（已 gitignore，永不入库）；入库文档只写占位符（如 `<PRODUCTION_SERVER_IP>`、`<DEPLOY_USER>`）+ 指向 `docs/private/ops.md` 的注记。
+- 禁止将密钥、密码、token、服务器 IP、本机绝对路径写入入库文件。
 - 
 
 ## 默认跳过

@@ -6,7 +6,7 @@
 ## 流程
 
 1. **本地构建**：`npm run build`，产物输出到 `dist/`
-2. **本地直推**：执行 `deploy-rsync-static.sh.tmpl`（落地为脚本后填入变量区），只把 `dist/` rsync 到服务器 `/opt/<项目名>/dist`
+2. **本地直推**：执行 `deploy-rsync-static.sh.tmpl`（落地为脚本后用环境变量传入真实值，见脚本头注释），只把 `dist/` rsync 到服务器 `/opt/<项目名>/dist`
 3. **服务器伺服**：共享 Caddy 直接以文件伺服该目录，**不走容器**，无需 docker
 
 > 改完 `dist/` 再次 rsync 即可生效；`file_server` 按请求读盘，无需重启。
