@@ -1,6 +1,6 @@
 ---
 name: zedboot
-description: 项目开局编排器。从零创建项目时一次性装好三套体系——项目管理体系（管理五件套 + 工作规则）、部署体系（Docker + rsync 直推 + 私有 Git 仓库备份）、UI 体系（调起 uiweft 生成 DESIGN.md）；也用于把缺体系的旧项目改造成"从一开始就装好"的状态（审计 → 差距方案 → 幂等安装）。本 Skill 只在开局/改造时运行一次，装完即退场，日常约束由装进项目的文件承担。Use when starting a new project from scratch, bootstrapping project management / deployment / UI systems, or retrofitting an existing project that lacks these systems.
+description: 项目开局编排器。从零创建项目时一次性装好三套体系——项目管理体系（管理五件套 + 工作规则）、部署体系（Docker + rsync 直推 + 私有 Git 仓库备份）、UI 体系（调起 zedui 生成 DESIGN.md）；也用于把缺体系的旧项目改造成"从一开始就装好"的状态（审计 → 差距方案 → 幂等安装）。本 Skill 只在开局/改造时运行一次，装完即退场，日常约束由装进项目的文件承担。Use when starting a new project from scratch, bootstrapping project management / deployment / UI systems, or retrofitting an existing project that lacks these systems.
 ---
 
 # zedboot — 项目开局编排器
@@ -13,7 +13,7 @@ description: 项目开局编排器。从零创建项目时一次性装好三套�
 |---|---|---|---|
 | 项目管理 | AI-Ready 项目管理规范 v1.4 | `docs/project/` 五件套 + 入口文件 + `archive/` | 所有项目 |
 | 部署 | 专用账号隔离 + Docker + Git/rsync 工作流 | Dockerfile 等 + `docs/guides/deployment.md` | 仅"可部署代码项目"（含混合项目的代码部分） |
-| UI | uiweft 编排工作流 | `DESIGN.md`（由 uiweft 生成） | 仅项目有界面时 |
+| UI | zedui 编排工作流 | `DESIGN.md`（由 zedui 生成） | 仅项目有界面时 |
 
 ## 模式判断：init 还是 adopt
 
@@ -30,9 +30,9 @@ description: 项目开局编排器。从零创建项目时一次性装好三套�
 
 ## 依赖自检（任何工作流的第一步）
 
-1. **uiweft 自检**（项目有界面时）：按上面的环境探测规则查找 name 为 `uiweft` 的 SKILL.md。找到 → 记录其路径备用；找不到 → **明确提示用户安装 uiweft**（https://github.com/zouh9426/uiweft），并告知 UI 支线暂停，管理体系与部署体系不受影响继续走。不要试图自己替代 uiweft 定 UI 规范。
+1. **zedui 自检**（项目有界面时）：按上面的环境探测规则查找 name 为 `zedui` 的 SKILL.md。找到 → 记录其路径备用；找不到 → **明确提示用户安装 zedui**（https://github.com/zouh9426/uiweft），并告知 UI 支线暂停，管理体系与部署体系不受影响继续走。不要试图自己替代 zedui 定 UI 规范。
 2. **GitHub 认证探测**（可部署/混合项目）：`gh auth status` 或检查 `~/.ssh/` 已有 key 与 `ssh -T git@github.com`。已配好 → 只确认账号，不问凭据；没配 → 在信息采集时给用户一次性配置指引，或允许"暂用本地 Git，远程待补"。
-3. **Git 本体探测**（所有项目）：`git --version`。不可用 → 给两个选项：引导安装（macOS：`xcode-select --install`）；或登记"暂不启用 Git"——则第 1 步的 Git 与隐私防线条目整组跳过 + 登记 TODO 待补，其余体系照常（与 uiweft 缺失的降级风格一致）。
+3. **Git 本体探测**（所有项目）：`git --version`。不可用 → 给两个选项：引导安装（macOS：`xcode-select --install`）；或登记"暂不启用 Git"——则第 1 步的 Git 与隐私防线条目整组跳过 + 登记 TODO 待补，其余体系照常（与 zedui 缺失的降级风格一致）。
 
 ## Phase 0：信息采集（init 的硬性前置；adopt 先挖后问）
 
@@ -93,7 +93,7 @@ ops.md 不进 Git、没有版本备份——落盘时提醒用户为它配独立
 
 ### 3. 装 UI 体系（项目有界面时）
 
-- 调起自检通过的 uiweft，进入它的 Phase 0（提问 → UUPM 出方案 → 用户确认 → 生成 DESIGN.md）。zedboot 不碰 UI 内容本身。
+- 调起自检通过的 zedui，进入它的 Phase 0（提问 → UUPM 出方案 → 用户确认 → 生成 DESIGN.md）。zedboot 不碰 UI 内容本身。
 - 完成后三件事：确认 `DESIGN.md` 落盘在项目根；登记进 PROJECT_INDEX；AGENTS.md 的"UI 规范"行就位（模板已带，确认内容语言一致）。
 - 若用户选择把 UI Phase 0 延后（不在 init 当场做）：登记 TODO 任务，AGENTS.md 的"UI 规范"行保留但注明"DESIGN.md 尚未生成，见 <任务编号>"，INDEX 的「图片与设计」表状态写"待生成"。
 
@@ -127,7 +127,7 @@ ops.md 不进 Git、没有版本备份——落盘时提醒用户为它配独立
 - 缺的补：走 init 同款模板。
 - 有的合：旧 README/TODO 的有效内容搬进新结构，旧文件归档进 `archive/`，索引记录替代关系。
 - 部署体系：已有 Docker 但缺纪律 → 只补账号/rsync/备份与文档；已有全套异构部署 → 按 B 的用户裁决执行（迁移 or 仅文档对齐）。
-- UI：无 DESIGN.md → 自检 uiweft 后调起其 Phase 0；有 DESIGN.md → 只登记不重定。
+- UI：无 DESIGN.md → 自检 zedui 后调起其 Phase 0；有 DESIGN.md → 只登记不重定。
 - pre-push 隐私闸门（项目已启用 Git 时）：`.git/hooks/pre-push` 不存在则用 `assets/hooks/pre-push.tmpl` 安装；已存在则跳过并提示人工合并。
 - **绝不改动业务代码逻辑**；改造只动管理层、部署层、文档层。
 
@@ -143,7 +143,7 @@ ops.md 不进 Git、没有版本备份——落盘时提醒用户为它配独立
 1. **信息采集不齐（或明确登记待定）不动工**；adopt 的方案未经用户批准不动手。
 2. **幂等**：一切安装动作可重复执行；已存在且有效的内容不覆盖，走合并/归档。
 3. **秘密边界**：私钥内容、密码、token 永不写入入库文件；只登记位置与引用。运维真实值（服务器 IP、SSH 端口、密钥真实路径、crontab 调度、本机绝对路径）同样不入库，统一存本地 `docs/private/ops.md`（已 gitignore）。
-4. **UI 规范不归 zedboot 定**：uiweft 未安装就提示安装，不越权替代。
+4. **UI 规范不归 zedboot 定**：zedui 未安装就提示安装，不越权替代。
 5. **装完即退场**：不在项目里留对本 Skill 的运行时依赖；项目文件不得引用 Skill 内路径作为日常必读（"完整参考版位置"这类注明除外）。
 6. **Git 纪律**：每项目独立私有仓库；本地 Commit 照常；push 只与发布/交付绑定；Git Tag 在部署和线上验证之后打。
 7. 改造只动管理/部署/文档层，**不动业务代码**。

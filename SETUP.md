@@ -24,14 +24,14 @@
 | skill 名 | 作用 | 必需性 |
 |---|---|---|
 | `zedboot` | 编排层本体 | 必需 |
-| `uiweft` | UI 支线（生成 DESIGN.md） | 可选 |
+| `zedui` | UI 支线（生成 DESIGN.md） | 可选 |
 
 列出"已有 / 缺失"清单给我。
 
 ## 第 3 步：安装缺失的 skill
 
 - **zedboot（必需）**：`git clone https://github.com/zouh9426/zedboot` 到临时目录，把其中的 `zedboot/` 子目录拷进技能目录（注意：仓库根不是 skill 本体，子目录才是），用完删除临时目录。
-- **uiweft（可选）**：如果我需要 UI 体系而你第 2 步没找到，告诉我并可按 https://github.com/zouh9426/uiweft 的 SETUP 指引安装；不装也不影响管理体系与部署体系。
+- **zedui（可选）**：如果我需要 UI 体系而你第 2 步没找到，告诉我并可按 https://github.com/zouh9426/uiweft 的 SETUP 指引安装；不装也不影响管理体系与部署体系。
 - 安装后再次按 `name:` 核实。
 
 ## 第 4 步：自检
@@ -41,6 +41,6 @@
 1. 读 `<zedboot>/SKILL.md`，确认 frontmatter 可解析（有 `name:` 和 `description:`）。
 2. `python3 <zedboot>/scripts/audit.py --help` —— 应输出用法说明；再对一个真实目录试跑一次，应输出结构化审计报告而非报错。
 
-两项全过后，向我汇报：zedboot 的安装路径、uiweft 检测结果、以及一句确认——"zedboot 安装完成，对你的项目说『用 zedboot 从零初始化这个项目』或『用 zedboot 改造这个旧项目』即可开始"。
+两项全过后，向我汇报：zedboot 的安装路径、zedui 检测结果、以及一句确认——"zedboot 安装完成，对你的项目说『用 zedboot 从零初始化这个项目』或『用 zedboot 改造这个旧项目』即可开始"。
 
 ---
