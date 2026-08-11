@@ -88,7 +88,7 @@ ops.md 不进 Git、没有版本备份——落盘时提醒用户为它配独立
   - 静态站点：无应用容器，按 `assets/deploy/static/README.md`——本地构建、rsync 只推 `dist/`、服务器共享 Caddy 直接伺服。
 - 生成 `docs/guides/deployment.md`（用 `assets/deploy/deployment.md.tmpl`；入库文件只写占位符，真实运维值按下条入 ops.md）。
 - 生成 `docs/private/ops.md`（用 `assets/project/ops.md.tmpl`，填入 Phase 0 采集的真实运维值），并提醒用户：ops.md 不进 Git、无版本备份，需配独立私有备份通道（如私有 ops-notes 仓库）。
-- 生成 `docs/private/backup-manifest.conf`（模板 `assets/project/backup-manifest.conf.tmpl`）：zedback 每日备份按它拉取服务器数据，字段含义见模板注释；无部署项目不生成。
+- 生成 `docs/private/backup-manifest.conf`（模板 `assets/project/backup-manifest.conf.tmpl`）：zedback 每日备份按它拉取服务器数据，字段含义见模板注释；无部署项目不生成；**首次部署完成后必须更新该清单**：DEPLOYED 翻为 true 并填实 SSH_TARGET/SSH_KEY/SERVER_DIR/SERVER_PULLS/NOTE（部署动作与改卡是同一流程的一部分）。
 - 上线 Checklist（`assets/checklists/go-live-checklist.md`）登记为 TODO 任务。
 - `.env.example` 只写键名入库；`.env` 永不入库（`.gitignore` 纪律见第 1 步的 Git 条目）。
 
@@ -100,6 +100,7 @@ ops.md 不进 Git、没有版本备份——落盘时提醒用户为它配独立
 
 ### 4. 收口闭环
 
+- 登记进 zedback 中央登记簿：把项目绝对路径追加一行到 `~/Documents/Backups/projects.index`（文件不存在则创建；路径已在簿中则跳过，幂等；**追加，绝不覆盖重写**）。无 zedback 环境（该文件体系不存在且用户未使用 zedback）时跳过此步。
 - 三体系交界面只有三个文件，逐一核对：`AGENTS.md`（引用 PROJECT_RULES、DESIGN.md、deployment.md）、`PROJECT_INDEX.md`（外部资源表填好：GitHub 仓库/服务器/域名/端口/备份）、`TODO.md`（初始任务建好）。
 - 向用户输出**项目识别摘要**（管理规范 §7.1 的第一次实践），请用户确认。
 - 全部信息一次要齐、一次落盘；之后本 Skill 退场。
@@ -130,6 +131,7 @@ ops.md 不进 Git、没有版本备份——落盘时提醒用户为它配独立
 - 部署体系：已有 Docker 但缺纪律 → 只补账号/rsync/备份与文档；已有全套异构部署 → 按 B 的用户裁决执行（迁移 or 仅文档对齐）；同时补生成 `docs/private/backup-manifest.conf`（已存在则跳过）。
 - UI：无 DESIGN.md → 自检 zedui 后调起其 Phase 0；有 DESIGN.md → 只登记不重定。
 - pre-push 隐私闸门（项目已启用 Git 时）：`.git/hooks/pre-push` 不存在则用 `assets/hooks/pre-push.tmpl` 安装；已存在则跳过并提示人工合并。
+- zedback 中央登记簿：同 init 第 4 步，把项目绝对路径追加进 `~/Documents/Backups/projects.index`（幂等）。
 - **绝不改动业务代码逻辑**；改造只动管理层、部署层、文档层。
 
 ### D. 对齐收尾

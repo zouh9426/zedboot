@@ -26,6 +26,7 @@
 
 - [ ] 私有仓库（备份用）；服务器不配 deploy key、不检出 git
 - [ ] 首次部署：本地 rsync 全量代码到 `/opt/<项目名>`，在服务器配好 `.env` 后 `docker compose up -d --build`
+- [ ] 更新 `docs/private/backup-manifest.conf`：DEPLOYED=true + 填实服务器字段（zedback 每日备份据此拉取服务器数据，不改卡则服务器数据静默不进备份）
 
 ## D. 日常维护（一句话）
 
