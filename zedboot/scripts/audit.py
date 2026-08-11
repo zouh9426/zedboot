@@ -501,6 +501,19 @@ def detect_git(root):
     data["status"] = "repo"
     data["is_repo"] = True
 
+    # 嵌套仓库边界：目录自身无 .git、被外层仓库包含时，git 命令会静默命中
+    # 外层仓库（分支/远程/提交记录全是外层的）——按"自身非仓库"处理
+    ok, out, err, note = _run_git(root, ["rev-parse", "--show-toplevel"])
+    if ok and out.strip() and \
+            os.path.realpath(out.strip()) != os.path.realpath(root):
+        data["status"] = "not_repo"
+        data["is_repo"] = False
+        data["is_repo_note"] = "目录自身无 git 仓库（被外层仓库包含），git 字段按非仓库处理"
+        data["env_tracked"] = False
+        data["unknown_notes"].append(
+            "目录自身无 git 仓库（被外层仓库包含），git 相关字段无法探测，交由 AI 判断")
+        return data
+
     # 当前分支
     ok, out, err, note = _run_git(root, ["branch", "--show-current"])
     if ok:
@@ -674,9 +687,10 @@ def detect_deploy_traces(root):
             continue
         for n in names:
             low = n.lower()
+            # 只看脚本类文件：文档扩展名（如 deploy-notes.md）不计入部署脚本
             if os.path.isfile(os.path.join(base, n)) and any(
                 tag in low for tag in ("deploy", "rsync", "backup")
-            ):
+            ) and not low.endswith((".md", ".markdown", ".txt", ".rst")):
                 script_names.append(os.path.join(sub, n) if sub else n)
     data["deploy_scripts"] = {"exists": bool(script_names), "files": sorted(script_names)}
 
@@ -808,8 +822,9 @@ _TEXT_HEAD = 4096                   # 二进制判定：头部含 NUL 字节视�
 
 _IPV4_RE = re.compile(r"\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}(?![\d.])")
 # 本机绝对路径：/Users/ 或 /home/ 下的具体名字段；
-# < 或 > 开头的占位符段（如 /home/<账号>）不匹配，避免误报
-_LOCAL_PATH_RE = re.compile(r"/(?:Users|home)/([^/\s<>\x00]+)")
+# < 或 > 开头的占位符段（如 /home/<账号>）不匹配，避免误报；
+# 名字段排除 [ ]，避免把正则字符类（如自检命令里的 /Users/[a-zA-Z0-9_-]+/）误判为路径
+_LOCAL_PATH_RE = re.compile(r"/(?:Users|home)/([^/\s<>\x00\[\]]+)")
 _PRIVATE_KEY_RE = re.compile(r"-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----")
 
 _PRIVACY_TYPE_LABELS = {
@@ -819,9 +834,26 @@ _PRIVACY_TYPE_LABELS = {
     "docs_private_tracked": "docs/private/ 文件被 git 跟踪",
 }
 
+# zedboot 工作流生成的管理文档：按流程必须记录风险与占位说明，
+# 其中的 IP/路径字样多为"风险元描述"而非真实泄露——命中单独列示，不计入风险结论
+_MANAGEMENT_DOC_PATHS = frozenset({
+    "AGENTS.md",
+    "docs/project/TODO.md",
+    "docs/project/DECISION_LOG.md",
+    "docs/project/PROJECT_INDEX.md",
+    "docs/project/PROJECT_STATE.md",
+    "docs/project/AUDIT_REPORT.md",
+    "docs/project/ADOPTION_PLAN.md",
+})
+# git ls-files 输出与项目实际大小写可能不一致（§4 管理文档检测本就大小写不敏感），
+# 降级匹配同样按小写口径，避免 Docs/Project/TODO.md 这类变体漏降级被当真风险
+_MANAGEMENT_DOC_PATHS_LOWER = frozenset(p.lower() for p in _MANAGEMENT_DOC_PATHS)
+
 
 def _is_public_ipv4(ip):
-    """IPv4 是否属公网（排除 0.0.0.0 / 回环 / 三类私网）。"""
+    """IPv4 是否属公网。排除清单与 assets/hooks/pre-push.tmpl 保持一致：
+    0.0.0.0/8、回环 127/8、私网 10/8 与 172.16/12 与 192.168/16、
+    链路本地 169.254/16、受限广播 255.255.255.255、RFC 5737 文档示例段。"""
     parts = ip.split(".")
     if len(parts) != 4:
         return False
@@ -831,7 +863,7 @@ def _is_public_ipv4(ip):
         return False
     if any(x > 255 for x in (a, b, c, d)):
         return False
-    if ip == "0.0.0.0":
+    if a == 0:                         # 0.0.0.0/8 本网络
         return False
     if a == 127:                       # 127.0.0.0/8 回环
         return False
@@ -840,6 +872,12 @@ def _is_public_ipv4(ip):
     if a == 172 and 16 <= b <= 31:     # 172.16.0.0/12 私网
         return False
     if a == 192 and b == 168:          # 192.168.0.0/16 私网
+        return False
+    if a == 169 and b == 254:          # 169.254.0.0/16 链路本地
+        return False
+    if (a, b, c) in ((192, 0, 2), (198, 51, 100), (203, 0, 113)):
+        return False                   # RFC 5737 文档示例段
+    if ip == "255.255.255.255":        # 受限广播
         return False
     return True
 
@@ -865,29 +903,93 @@ def _read_text_head(path, limit):
     return raw.decode("utf-8", "replace")
 
 
-def _scan_text_privacy_hits(text):
-    """扫描文本内容，返回 {命中类型: [行号...]}（每行每类只计一次）。"""
+def _scan_text_privacy_hits(text, home_allow=None):
+    """扫描文本内容，返回 {命中类型: [行号...]}（每行每类只计一次）。
+
+    home_allow：可推导部署账号名（= 项目目录名）。/home/<home_allow> 是部署体系
+    约定的服务器端可推导路径（存储纪律允许写入入库文档），不视为本机路径泄露。
+    """
     hits = {}
     for lineno, line in enumerate(text.splitlines(), 1):
         if _PRIVATE_KEY_RE.search(line):
             hits.setdefault("private_key", []).append(lineno)
-        if _LOCAL_PATH_RE.search(line):
+        path_hits = [
+            m for m in _LOCAL_PATH_RE.finditer(line)
+            if not (home_allow and m.group(0).startswith("/home/")
+                    and m.group(1) == home_allow)
+        ]
+        if path_hits:
             hits.setdefault("local_path", []).append(lineno)
         if any(_is_public_ipv4(m.group(0)) for m in _IPV4_RE.finditer(line)):
             hits.setdefault("ip", []).append(lineno)
     return hits
 
 
+# 非 git 仓库降级扫描工作区时跳过的噪音目录（依赖/构建产物/IDE）
+_WORKSPACE_SKIP_DIRS = frozenset({
+    ".git", "node_modules", "__pycache__", ".venv", "venv",
+    "dist", "build", ".next", "target", ".idea", ".vscode",
+})
+_WORKSPACE_SCAN_MAX_FILES = 500  # 工作区扫描文件数上限，防超大目录树拖垮审计
+
+
+def _file_exceeds(path, limit):
+    """文件大小是否超过扫描上限（无法获取大小时视为未超）。"""
+    try:
+        return os.path.getsize(path) > limit
+    except OSError:
+        return False
+
+
+def _record_hits(data, rel, hits):
+    """把命中登记进 data：管理文档命中单独列示（多为风险元描述），
+    其余计入风险结论。"""
+    target = ("management_doc_items" if rel.lower() in _MANAGEMENT_DOC_PATHS_LOWER
+              else "risk_items")
+    for htype, lines in hits.items():
+        data[target].append({
+            "file": _clean(rel),
+            "type": htype,
+            "type_label": _PRIVACY_TYPE_LABELS[htype],
+            "count": len(lines),
+            "lines": lines[:20],
+        })
+    if hits and target == "risk_items":
+        data["risk_found"] = True
+
+
+def _scan_one_file(data, root, rel, home_allow):
+    """扫描单个文件并登记命中；返回 True 表示该文件计入了扫描数。"""
+    path = os.path.join(root, rel)
+    truncated = _file_exceeds(path, _SCAN_FILE_LIMIT)
+    text = _read_text_head(path, _SCAN_FILE_LIMIT)
+    if text is None:
+        return False  # 不可读或二进制，跳过
+    if truncated:
+        data["truncated_files"].append(_clean(rel))
+    _record_hits(data, rel, _scan_text_privacy_hits(text, home_allow))
+    return True
+
+
 def detect_committed_secrets(root):
-    """检查 git 跟踪的文本文件是否含：公网 IPv4 / 本机绝对路径 / 私钥格式头。
-    绝对只读：仅执行 git ls-files 与读文件内容，不修改被审计项目。
-    跳过 .env（已有专项检查）与 .gitignore；docs/private/ 下文件被跟踪本身即风险，
-    单独列项，不扫其内容。"""
+    """检查文本文件是否含：公网 IPv4 / 本机绝对路径 / 私钥格式头。
+    绝对只读：仅执行只读 git 命令与读文件内容，不修改被审计项目。
+
+    git 仓库：扫 git 跟踪的文件（跳过 .env（另有专项检查）与 .gitignore；
+    docs/private/ 下文件被跟踪本身即风险，单独列项，不扫其内容）。
+    非 git 仓库：无入库文件概念，降级扫描工作区文本文件（跳过依赖/构建噪音目录），
+    命中即未入库风险——改造前的项目恰是隐私风险期，不能静默跳过。
+    被外层 git 仓库包含的嵌套目录按非仓库处理（git 命令会静默命中外层仓库，
+    其跟踪清单与状态不代表本目录，结论不可信）。
+    """
     data = {
         "status": "unknown",
         "risk_found": False,
         "risk_items": [],
+        "management_doc_items": [],
+        "workspace_scan": False,
         "scanned_count": None,
+        "truncated_files": [],
         "unknown_notes": [],
     }
     ok, out, err, note = _run_git(root, ["ls-files"])
@@ -896,49 +998,86 @@ def detect_committed_secrets(root):
         data["status"] = "git_error"
         data["unknown_notes"].append(note)
         return data
-    if not ok:
+
+    files = None
+    if ok:
+        # 嵌套仓库边界：show-toplevel 不等于被审计根目录时，ls-files 列出的
+        # 是外层仓库的跟踪清单——按非仓库降级处理
+        ok2, out2, err2, note2 = _run_git(root, ["rev-parse", "--show-toplevel"])
+        if ok2 and out2.strip() and \
+                os.path.realpath(out2.strip()) != os.path.realpath(root):
+            data["unknown_notes"].append(
+                "目录自身无 git 仓库（被外层仓库包含），按非仓库做工作区降级扫描")
+        else:
+            data["status"] = "repo"
+            files = [l.strip() for l in out.splitlines() if l.strip()]
+    else:
         # git 正常执行但 ls-files 失败：视为非仓库（无跟踪文件概念）
-        data["status"] = "not_repo"
-        data["scanned_count"] = 0
         if err and "not a git repository" not in err.lower():
             data["unknown_notes"].append(
-                "git ls-files 执行失败，交由 AI 判断：%s" % _clean(err or "无错误输出"))
-        return data
+                "git ls-files 执行失败（按非仓库做工作区降级扫描），交由 AI 判断：%s"
+                % _clean(err or "无错误输出"))
 
-    data["status"] = "repo"
-    files = [l.strip() for l in out.splitlines() if l.strip()]
-    data["scanned_count"] = len(files)
+    home_allow = os.path.basename(os.path.realpath(root))
 
-    for rel in files:
-        base = os.path.basename(rel)
-        if base == ".env" or base == ".gitignore":
-            continue  # .env 已有专项检查；.gitignore 本就应被跟踪，不扫内容
-        if rel.lower().startswith("docs/private/"):
-            # 理论上不该被跟踪：被跟踪本身即风险项，不做内容扫描
-            data["risk_items"].append({
-                "file": _clean(rel),
-                "type": "docs_private_tracked",
-                "type_label": _PRIVACY_TYPE_LABELS["docs_private_tracked"],
-                "count": 1,
-                "lines": None,
-            })
-            data["risk_found"] = True
-            continue
-        text = _read_text_head(os.path.join(root, rel), _SCAN_FILE_LIMIT)
-        if text is None:
-            continue  # 不可读或二进制，跳过
-        hits = _scan_text_privacy_hits(text)
-        for htype, lines in hits.items():
-            data["risk_items"].append({
-                "file": _clean(rel),
-                "type": htype,
-                "type_label": _PRIVACY_TYPE_LABELS[htype],
-                "count": len(lines),
-                "lines": lines[:20],
-            })
-            data["risk_found"] = True
+    if files is not None:
+        # git 仓库：扫跟踪清单
+        data["scanned_count"] = len(files)
+        # 未跟踪文件不在入库扫描范围——提醒存量，防脏仓库里含密草稿被 git add 直接扫进提交
+        ok3, out3, err3, note3 = _run_git(
+            root, ["ls-files", "--others", "--exclude-standard"])
+        if ok3:
+            untracked = [l for l in out3.splitlines() if l.strip()]
+            if untracked:
+                data["unknown_notes"].append(
+                    "存在 %d 个未跟踪文件未纳入入库扫描（git add 前请自查是否含敏感内容）"
+                    % len(untracked))
+        for rel in files:
+            base = os.path.basename(rel)
+            if base == ".env" or base == ".gitignore":
+                continue  # .env 已有专项检查；.gitignore 本就应被跟踪，不扫内容
+            if rel.lower().startswith("docs/private/"):
+                # 理论上不该被跟踪：被跟踪本身即风险项，不做内容扫描
+                data["risk_items"].append({
+                    "file": _clean(rel),
+                    "type": "docs_private_tracked",
+                    "type_label": _PRIVACY_TYPE_LABELS["docs_private_tracked"],
+                    "count": 1,
+                    "lines": None,
+                })
+                data["risk_found"] = True
+                continue
+            _scan_one_file(data, root, rel, home_allow)
+    else:
+        # 非仓库：工作区降级扫描
+        data["status"] = "not_repo"
+        data["workspace_scan"] = True
+        scanned = 0
+        stop = False
+        for dirpath, dirnames, filenames in os.walk(root):
+            if stop:
+                break
+            dirnames[:] = [d for d in dirnames if d not in _WORKSPACE_SKIP_DIRS]
+            for fn in sorted(filenames):
+                if fn in (".env", ".gitignore"):
+                    continue  # .env 不入扫描（非仓库无跟踪概念）；.gitignore 无敏感内容
+                if scanned >= _WORKSPACE_SCAN_MAX_FILES:
+                    data["unknown_notes"].append(
+                        "工作区文件超过 %d 个，仅扫描前 %d 个，其余未检"
+                        % (_WORKSPACE_SCAN_MAX_FILES, _WORKSPACE_SCAN_MAX_FILES))
+                    stop = True
+                    break
+                rel = os.path.relpath(os.path.join(dirpath, fn), root).replace(os.sep, "/")
+                if _scan_one_file(data, root, rel, home_allow):
+                    scanned += 1
+        data["scanned_count"] = scanned
+
+    for rel in data["truncated_files"][:10]:
+        data["unknown_notes"].append(
+            "文件 %s 超过 2MB，仅扫描头部，剩余部分未检" % rel)
 
     data["risk_items"].sort(key=lambda x: (x["file"], x["type"]))
+    data["management_doc_items"].sort(key=lambda x: (x["file"], x["type"]))
     return data
 
 
@@ -994,6 +1133,17 @@ def _maybe(data, key, fmt=None):
     if v is None:
         return _unknown_str(data.get(key + "_note"))
     return fmt(v) if fmt else str(v)
+
+
+def _fmt_hit_loc(item):
+    """命中位置渲染：'，命中 N 行，行号 1, 2'（截断时补'等共 N 行'）。"""
+    if not item["lines"]:
+        return ""
+    loc = "，命中 %d 行，行号 %s" % (
+        item["count"], ", ".join(str(x) for x in item["lines"]))
+    if item["count"] > len(item["lines"]):
+        loc += " 等共 %d 行" % item["count"]
+    return loc
 
 
 def render_text(results, root, ts):
@@ -1065,6 +1215,8 @@ def render_text(results, root, ts):
         L.append("- .env 是否被 git 跟踪: %s" % _maybe(g, "env_tracked"))
     elif g["status"] == "not_repo":
         L.append("- 是否为 git 仓库: 否")
+        if g.get("is_repo_note"):
+            L.append("- 附注: %s" % g["is_repo_note"])
         L.append("- 其余 git 字段: unknown（交由 AI 判断：非 git 仓库）")
         L.append("- .env: %s" % ("存在（非 git 仓库，无跟踪风险）" if g["env_exists"] else "不存在"))
     else:
@@ -1191,22 +1343,27 @@ def render_text(results, root, ts):
     if cs["status"] == "git_error":
         note = (cs.get("unknown_notes") or ["无法探测"])[0]
         L.append("- 扫描: %s" % _unknown_str(note))
-    elif cs["status"] == "not_repo":
-        L.append("- 非 git 仓库，无入库文件概念，跳过")
-    elif cs["risk_found"]:
-        L.append("- 风险: [有]")
-        for item in cs["risk_items"]:
-            if item["lines"]:
-                loc = "，命中 %d 行，行号 %s" % (
-                    item["count"], ", ".join(str(x) for x in item["lines"]))
-                if item["count"] > len(item["lines"]):
-                    loc += " 等共 %d 行" % item["count"]
-            else:
-                loc = ""
-            L.append("- ⚠ %s: %s%s" % (item["type_label"], item["file"], loc))
     else:
-        L.append("- 风险: [无]（共 %d 个 git 跟踪文件，未发现命中）"
-                 % (cs["scanned_count"] or 0))
+        if cs.get("workspace_scan"):
+            L.append("- 非 git 仓库：降级扫描工作区文本文件 %d 个（命中即未入库风险）"
+                     % (cs["scanned_count"] or 0))
+        if cs["risk_found"]:
+            L.append("- 风险: [有]")
+            for item in cs["risk_items"]:
+                L.append("- ⚠ %s: %s%s" % (item["type_label"], item["file"],
+                                           _fmt_hit_loc(item)))
+        elif cs.get("workspace_scan"):
+            L.append("- 风险: [无]（工作区扫描未发现命中）")
+        else:
+            L.append("- 风险: [无]（共 %d 个 git 跟踪文件，未发现命中）"
+                     % (cs["scanned_count"] or 0))
+        mgmt = cs.get("management_doc_items") or []
+        if mgmt:
+            L.append("- 管理文档命中 %d 项（多为风险记录/占位说明等元描述，"
+                     "不视为泄露，人工确认即可）:" % len(mgmt))
+            for item in mgmt:
+                L.append("  - %s: %s%s" % (item["type_label"], item["file"],
+                                           _fmt_hit_loc(item)))
     L.append("")
 
     # 未能探测汇总

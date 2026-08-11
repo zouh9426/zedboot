@@ -16,6 +16,10 @@
 ZERO_SHA="0000000000000000000000000000000000000000"
 fail=0
 
+# 项目目录名（= 可推导部署账号）：/home/<项目目录名>/ 是部署体系约定的服务器端
+# 可推导路径（账号 = 项目名），不算本机路径泄露——放行口径与 audit.py 一致
+REPO_NAME="$(basename "$(git rev-parse --show-toplevel 2>/dev/null || pwd)")"
+
 # 统一按字节处理：避免 BSD grep 在 UTF-8 locale 下对多字节内容切分错位
 LC_ALL=C
 export LC_ALL=C
@@ -46,10 +50,15 @@ while read -r local_ref local_sha remote_ref remote_sha; do
     report "私钥格式头" "$range_desc"
   fi
 
-  # 2. 本机绝对路径（/Users/<名字>/、/home/<名字>/；占位符含 < 不会命中）
-  if printf '%s\n' "$added" | grep -qE '/(Users|home)/[A-Za-z0-9._-]+/'; then
-    report "本机绝对路径" "$range_desc"
-  fi
+  # 2. 本机绝对路径（/Users/<名字>/、/home/<名字>/；占位符含 < 不会命中；
+  #    /home/<项目目录名>/ 为可推导服务器路径，放行——口径同 audit.py）
+  bad_path=""
+  for p in $(printf '%s\n' "$added" | grep -oE '/(Users|home)/[A-Za-z0-9._-]+/' | sort -u); do
+    [ "$p" = "/home/${REPO_NAME}/" ] && continue
+    bad_path="$p"
+    break
+  done
+  [ -n "$bad_path" ] && report "本机绝对路径（$bad_path）" "$range_desc"
 
   # 3. 公网 IPv4（排除保留段后仍有命中才拦）
   bad_ip=""

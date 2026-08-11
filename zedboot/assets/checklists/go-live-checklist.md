@@ -4,6 +4,18 @@
 > 使用：复制进项目 TODO；可推导占位符（`<项目名>`、`<域名>`、`<端口>`、`<账号>`）落地时替换。
 > 隐私线：本清单入库，服务器 IP 等真实运维值不要写进来——真实值统一查本地 `docs/private/ops.md`（不入库）。
 
+## 静态站点（无容器）替代说明
+
+> 若本项目为静态站（Astro / Vite / Next.js 静态导出等，构建产物为 `dist/`，见 zedboot `assets/deploy/static/README.md`），走「无容器」方案，下列 Docker 相关条目**剔除不适用**，按下表替换；其余条目照常。
+
+- **A「安装 Docker；创建项目账号（docker 组、无 sudo）」** → 剔除 Docker 安装；创建项目账号（无 sudo，无需 docker 组）；服务器需已装共享 Caddy
+- **A「安装并配置反向代理：`<域名>` → `127.0.0.1:<端口>`」** → 改为配置共享 Caddy：`root * /opt/<项目名>/dist` + `file_server`（无容器端口）
+- **B「Dockerfile / docker-compose.yml / docker-entrypoint.sh」** → 剔除；替换为：本地 `npm run build`，确认构建产物 `dist/` 存在且为最新
+- **B「备份脚本 + crontab（存 `/opt/<项目名>/backups/`）」** → 剔除 backup.sh 数据备份；静态站无应用数据，备份 = 仓库本身 + 服务器 `/opt/<项目名>/dist` 目录
+- **C「首次部署：rsync 全量代码 → `docker compose up -d --build`」** → 替换为：本地执行 `deploy-rsync-static.sh`（已带可执行位），只把 `dist/` rsync 到服务器 `/opt/<项目名>/dist`，共享 Caddy 直接伺服即生效
+- **D「发布 = rsync → `docker compose up -d --build`」** → 替换为：本地 `npm run build` → `./deploy-rsync-static.sh`
+- **D「看日志 `docker compose logs` / 重启 `docker compose restart`」** → 剔除；无容器、无应用日志、无需重启，改完 `dist/` 重新 rsync 即生效；仅改动服务器 Caddyfile 后才需 `caddy reload`
+
 ## A. 系统层一次性操作（管理员执行）
 
 - [ ] 开通云服务器（免备案地区 / 大陆需 ICP 备案）

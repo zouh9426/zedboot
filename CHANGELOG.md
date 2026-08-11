@@ -2,6 +2,23 @@
 
 本项目所有值得记录的变更都写在这里。格式约定：每条目回答两个问题——**改了什么**、**为什么这么改（决策理由）**。
 
+## [0.5.7] - 2026-08-11
+
+双场景实战自查（init 模拟 + adopt 模拟各跑一遍完整流程）暴露的缺陷集中修复：脚本执行位、hooksPath 语义纠错、audit.py 误报治理与覆盖缺口、static 栈模板适配、契约默认值。
+
+- **部署脚本执行位**：5 个 `.sh.tmpl` 加执行位（git 100644→100755），SKILL.md init 第 2 步补"脚本落盘后统一 `chmod +x`"指示。理由：实测按流程字面执行后 `./deploy-rsync-static.sh` 直接 Permission denied（模板 git mode 644，落盘即不可执行），部署流程第一步即断；chmod 步骤是防模板来源/拷贝方式丢位的兜底。
+- **pre-push 闸门与 audit.py 的路径口径对齐**：闸门第 2 项检查改为逐条比对——`/home/<项目目录名>/`（= 可推导部署账号的服务器端路径）放行，与 audit.py 的 home_allow 口径一致；`/Users/` 与其他 `/home/<名>/` 照拦。理由：二轮回归实测干净 init 项目首次 push 被自己的闸门拦（deployment.md 落地后的 `/home/<项目名>/.ssh/` 假阳性）——上一轮只统一了 IP 口径，路径口径没跟上；拦错的闸门会被 `--no-verify` 绕过，形同虚设。
+- **backup.sh SQLite 容错**：`.backup` 失败从"set -e 中止全备份 + 留 0 字节孤儿文件"改为告警继续（tar 打包是主备份）并清掉半成品；恒真的 `[ -n "${SQLITE_DB}" ]` 守卫一并去掉。理由：坏库/非 SQLite 同名文件会让每日备份静默全灭，孤儿文件永不进滚动保留。
+- **audit.py 三处补丁**：§5 部署脚本探测排除文档扩展名（`deploy-notes.md` 不再虚增部署痕迹）；§9 管理文档降级匹配改小写口径（与 §4 的大小写不敏感检测一致，`Docs/Project/TODO.md` 变体不再漏降级）；repo 模式新增未跟踪文件数量提醒（防脏仓库含密草稿被 `git add` 直接扫进提交）。
+- **adopt 流程补两个经典缺口**：① 已被 git 跟踪的 `.env` 处置——`git rm --cached` 解除跟踪 + 提醒历史残留需历史重写、密钥应轮换（`.gitignore` 不解除已跟踪文件，此前全流程走完泄露原样保留）；② hooksPath 探测结论记入 PROJECT_STATE 时强制 `~/…` 相对表达（原样写绝对路径既违反自己的入库纪律，又会触发本机全局隐私闸门拒推）。
+- **部署文件幂等语义**：init 第 2 步明确"已存在的部署文件跳过不覆盖，需更新时提示人工合并"。理由：二轮回归实测幂等重跑把 compose 的人工端口修改静默回滚成模板默认值。
+- **模板细节**：PROJECT_INDEX 域名行的组合占位符 `<域名，DNS 托管于 <服务商>>` 拆开（逐个替换后外层无法消解、必残留）；docs-README 模板第 2 行安装指示注释补"落盘时删除"。
+- **hooksPath 静默失效纠错**：SKILL.md 改掉"全局 hooksPath 闸门与项目级钩子共存、互不覆盖"的错误结论——git 语义是 `core.hooksPath` 一旦设置就整体忽略 `.git/hooks`，本机成立纯属全局钩子显式链式调用的特例；init 第 1 步与 adopt 第 C 步新增 `core.hooksPath` 探测条目：非空且无法确认链式调用时醒目警告用户并记入 PROJECT_STATE。理由：非链式全局钩子的机器上隐私闸门"以为装了、实际没装"，且静默失效无任何报错。
+- **audit.py 误报治理与覆盖缺口**（7 项）：① IP 排除清单与 `pre-push.tmpl` 对齐（补 0.0.0.0/8、169.254/16、RFC 5737 文档段、受限广播），消除两组件对同一 IP 结论相反的口径分叉；② 本机路径正则排除 `[` `]`，AGENTS.md 自检命令里的 `/Users/[a-zA-Z0-9_-]+/` 字符类不再误报；③ `/home/<项目目录名>` 按"账号=项目名"的可推导服务器路径放行（deployment.md 填实后不再必报）；④ zedboot 生成的管理文档（AGENTS/TODO/DECISION_LOG/PROJECT_INDEX/PROJECT_STATE/AUDIT_REPORT/ADOPTION_PLAN）命中降级单列、不计入风险结论——这些文档按工作流必须记录风险，其 IP/路径字样多为元描述；⑤ 非 git 项目从"§9 整体跳过"改为工作区降级扫描（跳过依赖/构建噪音目录，500 文件上限），补上改造前风险期的机械覆盖；⑥ 嵌套仓库边界校验：`show-toplevel` 与被审计根不符时按非仓库处理，git 节与 §9 不再被外层仓库污染；⑦ 超 2MB 文件的截断事实记入"未能探测"汇总，不再静默漏报。理由：adopt 模拟实测——改造后重跑审计 13 条命中里 9 条是自己产出的管理文档（该抓的抓不到：无 git 项目硬编码 IP 与 .env 零机械检出；不该抓的全被抓），信噪比崩坏。改动经 10 项 fixture 测试矩阵验证全绿（含只读性校验和对比、JSON 模式、嵌套仓库、截断提示）。
+- **static 栈模板适配**：新增 `assets/deploy/deployment-static.md.tmpl`（无容器运维速查：构建→rsync 只推 dist→共享 Caddy 伺服），`go-live-checklist.md` 新增「静态站点（无容器）替代说明」区块（逐条映射 Docker 条目的剔除与替换），SKILL.md 的 deployment.md 生成与 Checklist 登记改为按栈路由。理由：init 模拟中 static 项目拿到一份全是 `docker compose` 命令的运维文档和永远完不成的 Docker 清单条目，与 static README 的部署方式直接矛盾。
+- **zedback 契约默认值修正**：`backup-manifest.conf.tmpl` 的 `ZB_DEPLOYED` 默认改 `false` 并加醒目契约注释（翻 true 必须同时填实 SSH 字段）。理由：模板默认 true 与"首次部署完成后才翻 true"的流程自相矛盾，照抄会让未上线项目被 zedback 当作已部署、每日对占位符 SSH 目标拉取失败。
+- **模板卫生**：DECISION_LOG 示例决议改用 HTML 注释包裹并标注"安装时删除"（对齐 TODO 模板惯例）；archive/docs README 模板头注释补"落盘时删除本注释"；deployment.md.tmpl 命令示例 `<DEPLOY_USER>@` 改 `<项目名>@`（账号=项目名是可推导值，不该用隔离值占位符）；SKILL.md 同步补"可推导占位符全文替换（含代码块内示例）"与"模板头注释/示例条目落盘时删除"两条指示。理由：字面复制即残留的虚构示例决议、元注释、漏替换占位符在两轮模拟中均实际出现。
+
 ## [0.5.6] - 2026-08-11
 
 zedback 深度绑定：开局/改造登记进中央登记簿，首次部署绑定更新身份证。

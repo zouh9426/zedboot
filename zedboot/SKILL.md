@@ -50,7 +50,7 @@ description: 项目开局编排器。从零创建项目时一次性装好三套�
 
 **F. 备份策略（有默认值，一问带过）**：保留份数（默认 7 份滚动）、是否同步对象存储异地容灾（默认否，登记为候选任务）。
 
-**"待定"机制**：B~F 任何一项都可以答待定——不阻塞流程。待定项自动生成 TODO 任务 + 在 PROJECT_STATE 标注，之后补上时按存储纪律分流落盘（可推导值入入库文档，不可推导值入 ops.md）。填写约定：**能确定的可推导字段一律当场填实**（如项目账号默认 = 项目名），只有真正待定的项在表格中统一写 `待定（任务编号）`（如"待定（ZWT-002）"）；脚本变量区与 deployment.md 只保留 `<占位符>` + 指向 `docs/private/ops.md` 的注记，真实值（含已定项）一律写入 ops.md。
+**"待定"机制**：B~F 任何一项都可以答待定——不阻塞流程。待定项自动生成 TODO 任务 + 在 PROJECT_STATE 标注，之后补上时按存储纪律分流落盘（可推导值入入库文档，不可推导值入 ops.md）。填写约定：**能确定的可推导字段一律当场填实**（如项目账号默认 = 项目名；全文替换、不留残留，含代码块内的命令示例），只有真正待定的项在表格中统一写 `待定（任务编号）`（如"待定（ZWT-002）"）；脚本变量区与 deployment.md 只保留 `<占位符>` + 指向 `docs/private/ops.md` 的注记，真实值（含已定项）一律写入 ops.md。
 
 **存储纪律（隐私线，违反即泄露事故）**：
 
@@ -61,7 +61,7 @@ description: 项目开局编排器。从零创建项目时一次性装好三套�
 
 ops.md 不进 Git、没有版本备份——落盘时提醒用户为它配独立私有备份通道（如私有 ops-notes 仓库），否则换机即丢。
 
-**转 Public 前置**：仓库 Private → Public 前，必须先清理 Git 历史中的运维真实值（`git filter-repo` 或重建仓库）——只改工作区文件不够，历史里仍有残留。配套兜底：本 Skill 提供项目级 pre-push 隐私闸门（`assets/hooks/pre-push.tmpl`，装进 `.git/hooks/pre-push`，自包含 bash、不依赖 Skill 路径），命中私钥/本机路径/公网 IP 即拒推，安装见 init 第 1 步（Git 与隐私防线条目）与 adopt 第 C 步；本机若另有全局 hooksPath 闸门（`~/.git-hooks/pre-push`），两者共存、互不覆盖。
+**转 Public 前置**：仓库 Private → Public 前，必须先清理 Git 历史中的运维真实值（`git filter-repo` 或重建仓库）——只改工作区文件不够，历史里仍有残留。配套兜底：本 Skill 提供项目级 pre-push 隐私闸门（`assets/hooks/pre-push.tmpl`，装进 `.git/hooks/pre-push`，自包含 bash、不依赖 Skill 路径），命中私钥/本机路径/公网 IP 即拒推，安装见 init 第 1 步（Git 与隐私防线条目）与 adopt 第 C 步。**注意 git 语义：`core.hooksPath` 一旦设置会整体忽略 `.git/hooks/`**——本机若另配全局 hooksPath（如 `~/.git-hooks`），仅当全局钩子显式链式调用项目级钩子时两道闸门才都生效，否则项目级闸门静默失效（不报错）。安装后必须按 init 第 1 步 / adopt 第 C 步的探测条目确认，不得默认"共存"。
 
 ## 工作流 init：从零创建
 
@@ -75,21 +75,22 @@ ops.md 不进 Git、没有版本备份——落盘时提醒用户为它配独立
 
 ### 1. 装管理体系
 
-- 用 `assets/project/` 模板生成：`README.md`、`AGENTS.md`、`CHANGELOG.md`、`docs/README.md`、`docs/project/` 五件套（PROJECT_RULES 见下、PROJECT_INDEX、PROJECT_STATE、TODO、DECISION_LOG）、`archive/README.md`。
+- 用 `assets/project/` 模板生成：`README.md`、`AGENTS.md`、`CHANGELOG.md`、`docs/README.md`、`docs/project/` 五件套（PROJECT_RULES 见下、PROJECT_INDEX、PROJECT_STATE、TODO、DECISION_LOG）、`archive/README.md`；模板头部的安装说明注释（"本文件是…模板"类）与注释包裹的示例条目（如 DECISION_LOG 的示例决议）落盘时一律删除。
 - **PROJECT_RULES.md = 复制 `references/project-rules-compact.md` 全文**进 `docs/project/PROJECT_RULES.md`（AI 日常读项目内的副本，不读 Skill）。
 - 完整参考版（`references/project-rules-reference.md`）默认**不复制进项目**；此时 AGENTS.md 里"完整参考版位置"一行注明"未随项目安装，见 zedboot skill 的 references/ 目录"。用户明确要求随项目安装时，复制到 `docs/reference/PROJECT_RULES_REFERENCE.md` 并改写该行。
 - 项目模式写入 PROJECT_INDEX 与 PROJECT_STATE；项目代码确定后，TODO 第一个任务 = 本项目的上线 Checklist（可部署项目）或第一个真实任务。
 - 只创建当前实际需要的目录，不机械全建（管理规范 §4 自适应目录规则）。
-- **Git 与隐私防线（所有启用 Git 的项目；可部署/混合默认启用，无部署项目按 Phase 0.B 的选择）**：初始化本地仓库 + `main` 分支 + 首次 commit，按 Phase 0.B 关联私有远程（**此时不 push**——push 随首次发布进行）；`.gitignore` 必须含 `.env`、`data/`、`backups/`、`docs/private/`；安装 pre-push 隐私闸门（`assets/hooks/pre-push.tmpl` 复制为 `.git/hooks/pre-push` 并 `chmod +x`；已存在则不覆盖，提示人工合并；`.git/hooks` 不随 clone 携带，新机器/重新克隆后重跑本步骤重装）。
+- **Git 与隐私防线（所有启用 Git 的项目；可部署/混合默认启用，无部署项目按 Phase 0.B 的选择）**：初始化本地仓库 + `main` 分支 + 首次 commit，按 Phase 0.B 关联私有远程（**此时不 push**——push 随首次发布进行）；`.gitignore` 必须含 `.env`、`data/`、`backups/`、`docs/private/`；安装 pre-push 隐私闸门（`assets/hooks/pre-push.tmpl` 复制为 `.git/hooks/pre-push` 并 `chmod +x`；已存在则不覆盖，提示人工合并；`.git/hooks` 不随 clone 携带，新机器/重新克隆后重跑本步骤重装）；装完探测 `git config core.hooksPath`——非空时 `.git/hooks` 会被整体忽略，须确认该 hooksPath 下的全局钩子会链式调用项目级钩子，无法确认则醒目警告用户并把结论记入 PROJECT_STATE（结论用 `~/…` 相对表达，不写本机绝对路径——入库文件纪律））。
 
 ### 2. 装部署体系（可部署/混合项目）
 
-- 按技术栈选 `assets/deploy/` 模板落盘根目录：Dockerfile（nextjs/python/go 之一；不在库中按 `references/deployment-guide.md` §3 设计点现场编写）、`docker-compose.yml`、`docker-entrypoint.sh`、`backup.sh`、`deploy-rsync.sh`、`.dockerignore`（`dockerignore.tmpl`，**不可省**——防止 `COPY . .` 把 `.env`/`data/` 拷进镜像）。
+- 按技术栈选 `assets/deploy/` 模板落盘根目录（幂等：已存在的文件跳过不覆盖，防回滚人工修改；需更新时提示人工合并）：Dockerfile（nextjs/python/go 之一；不在库中按 `references/deployment-guide.md` §3 设计点现场编写）、`docker-compose.yml`、`docker-entrypoint.sh`、`backup.sh`、`deploy-rsync.sh`、`.dockerignore`（`dockerignore.tmpl`，**不可省**——防止 `COPY . .` 把 `.env`/`data/` 拷进镜像）。
   - 静态站点：无应用容器，按 `assets/deploy/static/README.md`——本地构建、rsync 只推 `dist/`、服务器共享 Caddy 直接伺服。
-- 生成 `docs/guides/deployment.md`（用 `assets/deploy/deployment.md.tmpl`；入库文件只写占位符，真实运维值按下条入 ops.md）。
+  - 脚本落盘后统一 `chmod +x`（执行位兜底，防模板来源或拷贝方式丢位）：`docker-entrypoint.sh`、`backup.sh`、`deploy-rsync.sh`（静态站点为 `deploy-rsync-static.sh`）。
+- 生成 `docs/guides/deployment.md`（容器栈用 `assets/deploy/deployment.md.tmpl`，静态站点用 `assets/deploy/deployment-static.md.tmpl`；入库文件只写占位符，真实运维值按下条入 ops.md）。
 - 生成 `docs/private/ops.md`（用 `assets/project/ops.md.tmpl`，填入 Phase 0 采集的真实运维值），并提醒用户：ops.md 不进 Git、无版本备份，需配独立私有备份通道（如私有 ops-notes 仓库）。
 - 生成 `docs/private/backup-manifest.conf`（模板 `assets/project/backup-manifest.conf.tmpl`）：zedback 每日备份按它拉取服务器数据，字段含义见模板注释；无部署项目不生成；**首次部署完成后必须更新该清单**：DEPLOYED 翻为 true 并填实 SSH_TARGET/SSH_KEY/SERVER_DIR/SERVER_PULLS/NOTE（部署动作与改卡是同一流程的一部分）。
-- 上线 Checklist（`assets/checklists/go-live-checklist.md`）登记为 TODO 任务。
+- 上线 Checklist（`assets/checklists/go-live-checklist.md`）登记为 TODO 任务；静态站点先按文件内「静态站点（无容器）替代说明」区块裁剪再登记，剔除永远完不成的 Docker 条目。
 - `.env.example` 只写键名入库；`.env` 永不入库（`.gitignore` 纪律见第 1 步的 Git 条目）。
 
 ### 3. 装 UI 体系（项目有界面时）
@@ -130,7 +131,8 @@ ops.md 不进 Git、没有版本备份——落盘时提醒用户为它配独立
 - 有的合：旧 README/TODO 的有效内容搬进新结构，旧文件归档进 `archive/`，索引记录替代关系。
 - 部署体系：已有 Docker 但缺纪律 → 只补账号/rsync/备份与文档；已有全套异构部署 → 按 B 的用户裁决执行（迁移 or 仅文档对齐）；同时补生成 `docs/private/backup-manifest.conf`（已存在则跳过）。
 - UI：无 DESIGN.md → 自检 zedui 后调起其 Phase 0；有 DESIGN.md → 只登记不重定。
-- pre-push 隐私闸门（项目已启用 Git 时）：`.git/hooks/pre-push` 不存在则用 `assets/hooks/pre-push.tmpl` 安装；已存在则跳过并提示人工合并。
+- pre-push 隐私闸门（项目已启用 Git 时）：`.git/hooks/pre-push` 不存在则用 `assets/hooks/pre-push.tmpl` 安装（复制后 `chmod +x`）；已存在则跳过并提示人工合并；装完按 init 第 1 步同款探测 `core.hooksPath`，非空且无法确认全局钩子会链式调用项目级钩子时，醒目警告用户并记入 PROJECT_STATE（同样用 `~/…` 相对表达，不写本机绝对路径）。
+- 已被 git 跟踪的 `.env` 等敏感文件（audit §3 会报）：`git rm --cached <文件>` 解除跟踪 + 确认 `.gitignore` 覆盖——`.gitignore` 不会解除已跟踪文件；并提醒用户：历史提交里仍有残留，彻底清理需历史重写（口径见「转 Public 前置」），已泄露的密钥应同时轮换。
 - zedback 中央登记簿：同 init 第 4 步，把项目绝对路径追加进 `~/Documents/Backups/projects.index`（幂等）。
 - **绝不改动业务代码逻辑**；改造只动管理层、部署层、文档层。
 
@@ -160,7 +162,7 @@ ops.md 不进 Git、没有版本备份——落盘时提醒用户为它配独立
 | 部署规范正文 | `references/deployment-guide.md` |
 | 项目文件模板 | `assets/project/`（AGENTS/README/CHANGELOG/五件套/archive/ops.md.tmpl——ops.md 落到项目 `docs/private/`） |
 | 备份清单模板（zedback 联动） | `assets/project/backup-manifest.conf.tmpl`（落到项目 `docs/private/`，zedback 每日备份消费） |
-| 部署模板（四栈 + 通用件） | `assets/deploy/`（nextjs/python/go/static 四个栈目录，entrypoint 在栈目录内；compose/backup/rsync/dockerignore/deployment.md.tmpl 在目录根部） |
+| 部署模板（四栈 + 通用件） | `assets/deploy/`（nextjs/python/go/static 四个栈目录，entrypoint 在栈目录内；compose/backup/rsync/dockerignore/deployment.md.tmpl（含静态站变体 deployment-static.md.tmpl）在目录根部） |
 | Checklist 与报告模板 | `assets/checklists/`（go-live / audit-report / adoption-plan） |
 | pre-push 隐私闸门模板 | `assets/hooks/pre-push.tmpl`（装进项目 `.git/hooks/`，自包含） |
 | 旧项目审计脚本 | `scripts/audit.py` |

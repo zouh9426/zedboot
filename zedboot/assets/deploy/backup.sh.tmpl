@@ -24,10 +24,13 @@ SQLITE_DB="${DATA_DIR}/${PROJECT_NAME}.db"
 TIMESTAMP=$(date +%Y%m%d-%H%M%S)   # 文件名按时间序，供滚动保留排序
 mkdir -p "${BACKUP_DIR}"
 
-# ---- 1. SQLite 在线备份（库存在才执行）----
-if [ -n "${SQLITE_DB}" ] && [ -f "${SQLITE_DB}" ]; then
+# ---- 1. SQLite 在线备份（库存在才执行；失败只告警不中止——tar 打包仍是主备份）----
+if [ -f "${SQLITE_DB}" ]; then
   echo "[backup] SQLite 在线备份（一致性副本）…"
-  sqlite3 "${SQLITE_DB}" ".backup '${BACKUP_DIR}/${PROJECT_NAME}-${TIMESTAMP}.sqlite3'"
+  if ! sqlite3 "${SQLITE_DB}" ".backup '${BACKUP_DIR}/${PROJECT_NAME}-${TIMESTAMP}.sqlite3'"; then
+    echo "[backup] 警告：SQLite 在线备份失败（库文件损坏或非 SQLite 格式），跳过一致性副本，继续打包" >&2
+    rm -f -- "${BACKUP_DIR}/${PROJECT_NAME}-${TIMESTAMP}.sqlite3"   # 清掉半成品，防滚动保留漏管的孤儿文件
+  fi
 fi
 
 # ---- 2. 打包数据目录 ----
