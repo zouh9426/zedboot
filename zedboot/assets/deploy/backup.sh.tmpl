@@ -22,6 +22,15 @@ KEEP_N=7                    # 滚动保留最近 N 份（默认 7，可改）
 SQLITE_DB="${DATA_DIR}/${PROJECT_NAME}.db"
 
 TIMESTAMP=$(date +%Y%m%d-%H%M%S)   # 文件名按时间序，供滚动保留排序
+
+# ---- 0. data/ 存在性守卫：无应用数据（如静态站误装本脚本）时说明并退出，不产残缺包 ----
+# 静态站无 data/，其数据备份由 zedback 经 docs/private/backup-manifest.conf 的
+# ZB_PULLS 拉取 dist/ 承担，不依赖本脚本；此处兜底让误装也无害。
+if [ ! -d "${DATA_DIR}" ]; then
+  echo "[backup] 未找到数据目录 ${DATA_DIR}，无应用数据可备份，跳过（静态站等无数据项目的备份由 zedback 经 ZB_PULLS 拉取 dist/ 承担）"
+  exit 0
+fi
+
 mkdir -p "${BACKUP_DIR}"
 
 # ---- 1. SQLite 在线备份（库存在才执行；失败只告警不中止——tar 打包仍是主备份）----

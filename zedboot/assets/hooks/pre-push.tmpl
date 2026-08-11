@@ -1,7 +1,8 @@
 #!/bin/bash
 # ============================================================
 # pre-push 隐私闸门（zedboot skill 模板，自包含 bash，无外部依赖）
-# 安装：复制为 .git/hooks/pre-push 并 chmod +x。
+# 安装：复制为 .git/hooks/pre-push 并 chmod +x；把下方 <项目名> 替换为项目名
+#   （未替换会自动降级为空，仅放行目录名派生路径）。
 #   注意 .git/hooks 不随 clone 携带——新机器/重新克隆后需重装。
 # 拦截本次推送「新增行」中的高置信度隐私泄露：
 #   1. 私钥格式头（-----BEGIN ... PRIVATE KEY-----）
@@ -16,8 +17,17 @@
 ZERO_SHA="0000000000000000000000000000000000000000"
 fail=0
 
+# 项目名（= 可推导部署账号）：仓库目录名 ≠ 项目名很常见（目录取英文/缩写，项目名可能不同），
+# 部署体系约定账号 = 项目名，/home/<项目名>/ 同样是合法可推导服务器路径，需一并放行。
+# 安装时（init 第 1 步 / adopt 第 C 步）把 <项目名> 替换为项目名；未替换（仍含 <）时
+# 降级为空，只放行目录名派生路径（宁漏勿滥的保守口径）。
+PROJECT_NAME="<项目名>"
+case "$PROJECT_NAME" in *"<"* ) PROJECT_NAME="";; esac
+
 # 项目目录名（= 可推导部署账号）：/home/<项目目录名>/ 是部署体系约定的服务器端
-# 可推导路径（账号 = 项目名），不算本机路径泄露——放行口径与 audit.py 一致
+# 可推导路径（账号 = 项目名），不算本机路径泄露——放行语义与 audit.py 的 home_allow 对齐。
+# 注意：hook 路径正则要求尾部斜杠、匹配范围比 audit.py 窄（宁漏勿滥的有意设计），
+# 边界情形放行，交给 audit.py 与人工复核兜底
 REPO_NAME="$(basename "$(git rev-parse --show-toplevel 2>/dev/null || pwd)")"
 
 # 统一按字节处理：避免 BSD grep 在 UTF-8 locale 下对多字节内容切分错位
@@ -51,10 +61,15 @@ while read -r local_ref local_sha remote_ref remote_sha; do
   fi
 
   # 2. 本机绝对路径（/Users/<名字>/、/home/<名字>/；占位符含 < 不会命中；
-  #    /home/<项目目录名>/ 为可推导服务器路径，放行——口径同 audit.py）
+  #    /home/<目录名>/ 与 /home/<项目名>/（已替换时）为可推导服务器路径，放行——
+  #    语义与 audit.py home_allow 对齐，但 hook 正则要求尾部斜杠、匹配范围比
+  #    audit.py 窄，边界情形宁漏勿滥）
   bad_path=""
   for p in $(printf '%s\n' "$added" | grep -oE '/(Users|home)/[A-Za-z0-9._-]+/' | sort -u); do
     [ "$p" = "/home/${REPO_NAME}/" ] && continue
+    if [ -n "$PROJECT_NAME" ] && [ "$p" = "/home/${PROJECT_NAME}/" ]; then
+      continue
+    fi
     bad_path="$p"
     break
   done

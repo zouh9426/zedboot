@@ -26,18 +26,24 @@ if [[ "${SERVER_IP}" == "<PRODUCTION_SERVER_IP>" ]]; then
   exit 1
 fi
 
-# ---- 前置检查：构建产物存在 ----
-if [ ! -d "${PROJECT_DIR}/dist" ]; then
-  echo "[deploy] 未找到 dist/，请先在本地执行 npm run build" >&2
-  exit 1
+# ---- 形态适配：有 dist/ 推 dist/（构建型静态站）；无 dist/ 推站点根网页文件 ----
+# 两种形态：
+#   A) 构建型（Astro / Vite / Next.js 静态导出等）：npm run build 产物在 dist/，只推 dist/
+#   B) 无构建型（手写 HTML/CSS，站点根即网页根）：没有 dist/，推站点根（index.html 与 css/ 等）
+# 若构建产物目录名不是 dist/（如 public/、build/），把下方 SOURCE_DIR 改成对应目录即可。
+SOURCE_DIR="${PROJECT_DIR}/dist"
+if [ ! -d "${SOURCE_DIR}" ]; then
+  echo "[deploy] 未找到 dist/，按「无构建静态站」处理：推送站点根网页文件（index.html 与 css/ 等）"
+  SOURCE_DIR="${PROJECT_DIR}"
 fi
 
-# ---- 同步 dist/（只推构建产物，排除敏感与备份）----
-echo "[deploy] 同步 dist/ → ${DEPLOY_USER}@${SERVER_IP}:${REMOTE_DIR}/"
+# ---- 同步网页文件（只推站点内容，排除敏感与备份）----
+# 无构建形态下站点根若混有非网页目录（docs/、node_modules/ 等），在 --exclude 后追加排除项
+echo "[deploy] 同步 ${SOURCE_DIR}/ → ${DEPLOY_USER}@${SERVER_IP}:${REMOTE_DIR}/"
 rsync -az --delete \
   --exclude .git --exclude .env --exclude backups \
   -e "ssh -i ${SSH_KEY}" \
-  "${PROJECT_DIR}/dist/" "${DEPLOY_USER}@${SERVER_IP}:${REMOTE_DIR}/"
+  "${SOURCE_DIR}/" "${DEPLOY_USER}@${SERVER_IP}:${REMOTE_DIR}/"
 
 echo "[deploy] 完成。Caddy 直接伺服该目录，无需重启；"
 echo "        仅当改动服务器 Caddyfile 后才需 caddy reload。"

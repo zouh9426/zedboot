@@ -38,8 +38,9 @@ zedboot 在「改造旧项目」流程中使用的机械式只读审计探测器
   --json 模式下对应字段值为 null，并伴随同名 *_note 字段说明原因。
 - 非 UTF-8 文件名 / 文件内容：非法字节替换后展示，不中断、不报错。
 - git 未安装 / 命令超时 / 执行失败：相关字段标记 unknown 并附注原因。
-- 「管理文档 N/10」的 10 指：README.md / AGENTS.md / CHANGELOG.md /
-  DESIGN.md / docs/README.md + 五件套（docs/project/ 下 PROJECT_RULES.md /
+- 「管理文档 N/10」的 10 指（与 references/project-rules-compact.md §16
+  最小体系一致）：README.md / AGENTS.md / CHANGELOG.md / docs/README.md /
+  archive/README.md + 五件套（docs/project/ 下 PROJECT_RULES.md /
   PROJECT_INDEX.md / PROJECT_STATE.md / TODO.md / DECISION_LOG.md）。
 """
 
@@ -79,18 +80,19 @@ MANAGEMENT_DOCS = (
     "docs/guides/deployment.md",
 )
 
-# 就绪度统计所用的 10 项核心管理文档
+# 就绪度统计所用的 10 项核心管理文档（正典十项：不含 DESIGN.md，含 archive/README.md；
+# DESIGN.md 由 UI 节 detect_ui 单独检查，不混入十项计数）
 CORE_MANAGEMENT_DOCS = (
     "README.md",
     "AGENTS.md",
     "CHANGELOG.md",
-    "DESIGN.md",
     "docs/README.md",
     "docs/project/PROJECT_RULES.md",
     "docs/project/PROJECT_INDEX.md",
     "docs/project/PROJECT_STATE.md",
     "docs/project/TODO.md",
     "docs/project/DECISION_LOG.md",
+    "archive/README.md",
 )
 
 # 管理「五件套」
@@ -807,8 +809,9 @@ def detect_readiness(management_result, deploy_result):
     return {
         "management_docs_present": present,
         "management_docs_total": 10,
-        # DESIGN.md 计入 10 项，但仅适用有界面项目；无界面项目 9/10 属正常
-        "design_md_applicable_note": "DESIGN.md 仅适用有界面项目，无界面项目 9/10 即齐备",
+        # 10 项按正典（references/project-rules-compact.md §16）计数，不含 DESIGN.md；
+        # DESIGN.md 属 UI 节独立检查（detect_ui），不混入十项计数
+        "design_md_applicable_note": "管理文档 10 项按正典计数（DESIGN.md 不计入，在 UI 节单独检查）",
         "deploy_traces_present": deploy_result["count"],
         "has_full_management_five_piece": bool(five),
     }
@@ -822,9 +825,10 @@ _TEXT_HEAD = 4096                   # 二进制判定：头部含 NUL 字节视�
 
 _IPV4_RE = re.compile(r"\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}(?![\d.])")
 # 本机绝对路径：/Users/ 或 /home/ 下的具体名字段；
-# < 或 > 开头的占位符段（如 /home/<账号>）不匹配，避免误报；
-# 名字段排除 [ ]，避免把正则字符类（如自检命令里的 /Users/[a-zA-Z0-9_-]+/）误判为路径
-_LOCAL_PATH_RE = re.compile(r"/(?:Users|home)/([^/\s<>\x00\[\]]+)")
+# 名字段排除代码/占位符语法字符，只匹配"像真实路径"的段：
+#   < > —— 占位符（/home/<账号>）；[ ] —— 正则字符类（自检命令里的 /Users/[a-zA-Z0-9_-]+/）；
+#   $ { } " ' ` ( ) —— 脚本/代码里的变量与字符串片段（/home/${变量}/、startswith("/home/") 等）
+_LOCAL_PATH_RE = re.compile(r"/(?:Users|home)/([^/\s<>\x00\[\]${}\"'`()]+)")
 _PRIVATE_KEY_RE = re.compile(r"-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----")
 
 _PRIVACY_TYPE_LABELS = {
@@ -851,9 +855,11 @@ _MANAGEMENT_DOC_PATHS_LOWER = frozenset(p.lower() for p in _MANAGEMENT_DOC_PATHS
 
 
 def _is_public_ipv4(ip):
-    """IPv4 是否属公网。排除清单与 assets/hooks/pre-push.tmpl 保持一致：
+    """IPv4 是否属公网。排除段与 assets/hooks/pre-push.tmpl 的 IP 排除清单对齐：
     0.0.0.0/8、回环 127/8、私网 10/8 与 172.16/12 与 192.168/16、
-    链路本地 169.254/16、受限广播 255.255.255.255、RFC 5737 文档示例段。"""
+    链路本地 169.254/16、受限广播 255.255.255.255、RFC 5737 文档示例段。
+    （注：对齐仅指 IP 排除段；路径扫描 audit.py 不要求尾部斜杠、比 hook 更严，
+    hook 正则要求尾部斜杠、对边界情形宁漏勿滥是刻意设计。）"""
     parts = ip.split(".")
     if len(parts) != 4:
         return False
@@ -903,11 +909,41 @@ def _read_text_head(path, limit):
     return raw.decode("utf-8", "replace")
 
 
+_AGENTS_PROJECT_NAME_RE = re.compile(
+    r"^\s*[-*]?\s*项目名称\s*[：:]\s*(.*\S)\s*$"
+)
+
+
+def _project_name_from_agents(root):
+    """从项目根 AGENTS.md 的「项目名称」行提取项目名（中/英文冒号均可）。
+
+    该值 = 可推导部署账号（服务器账号 = 项目名），/home/<该值>/ 是部署体系允许
+    写入入库文档的服务器端路径，与目录名同权放行；占位符（未填实）不入放行集合。
+    找不到或无法提取返回 None。
+    """
+    rel = _find_file(root, "AGENTS.md")
+    if rel is None:
+        return None
+    text = _read_text(os.path.join(root, rel))
+    if text is None:
+        return None
+    for line in text.splitlines():
+        m = _AGENTS_PROJECT_NAME_RE.match(line.strip())
+        if not m:
+            continue
+        name = m.group(1).strip()
+        if not name or "<" in name or ">" in name:
+            return None
+        return name
+    return None
+
+
 def _scan_text_privacy_hits(text, home_allow=None):
     """扫描文本内容，返回 {命中类型: [行号...]}（每行每类只计一次）。
 
-    home_allow：可推导部署账号名（= 项目目录名）。/home/<home_allow> 是部署体系
-    约定的服务器端可推导路径（存储纪律允许写入入库文档），不视为本机路径泄露。
+    home_allow：可推导部署账号名集合（默认含项目目录名；若项目根 AGENTS.md 声明了
+    「项目名称」则一并加入）。/home/<其中的名字>/ 是部署体系约定的服务器端可推导
+    路径（存储纪律允许写入入库文档），不视为本机路径泄露。
     """
     hits = {}
     for lineno, line in enumerate(text.splitlines(), 1):
@@ -916,7 +952,7 @@ def _scan_text_privacy_hits(text, home_allow=None):
         path_hits = [
             m for m in _LOCAL_PATH_RE.finditer(line)
             if not (home_allow and m.group(0).startswith("/home/")
-                    and m.group(1) == home_allow)
+                    and m.group(1) in home_allow)
         ]
         if path_hits:
             hits.setdefault("local_path", []).append(lineno)
@@ -1018,7 +1054,10 @@ def detect_committed_secrets(root):
                 "git ls-files 执行失败（按非仓库做工作区降级扫描），交由 AI 判断：%s"
                 % _clean(err or "无错误输出"))
 
-    home_allow = os.path.basename(os.path.realpath(root))
+    home_allow = {os.path.basename(os.path.realpath(root))}
+    pn = _project_name_from_agents(root)
+    if pn:
+        home_allow.add(pn)
 
     if files is not None:
         # git 仓库：扫跟踪清单

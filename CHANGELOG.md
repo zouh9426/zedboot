@@ -2,9 +2,25 @@
 
 本项目所有值得记录的变更都写在这里。格式约定：每条目回答两个问题——**改了什么**、**为什么这么改（决策理由）**。
 
+## [0.5.10] - 2026-08-12
+
+全量审计（模板逐件核对 + audit.py 冒烟实测）后的集中修复。
+
+- **「十项管理文档」口径对齐**：`audit.py` 的 `CORE_MANAGEMENT_DOCS` 此前误含 `DESIGN.md`、漏 `archive/README.md`，与管理规范正典（audit-report 模板与 project-rules-compact §16）错位，adopt 审计的 N/10 计数会与报告模板对不上；已改为正典十项，DESIGN.md 保留在 UI 节单独检查。理由：同一事实两套口径是 0.5.7 口径对齐工作的遗漏，审计输出必须与管理规范逐字一致。
+- **部署模板镜像升 EOL 版本**：Next.js 模板 `node:20-alpine` → `node:22-alpine`（Node 20 已 EOL，22 LTS 支持至 2027-04）；Go 模板 `golang:1.22-alpine` → `golang:1.24-alpine`。理由：用停止安全修复的基础镜像开局等于自带漏洞出生。
+- **文档与注释修正**：CHANGELOG 0.5.9 条目中悬空版本号 0.3.4 改写为 0.3.x（仓库无此版本）；pre-push 与 audit.py 三处"口径一致"注释改为如实描述（hook 正则要求尾部斜杠、匹配范围比 audit.py 窄，属宁漏勿滥的刻意设计）；AGENTS.md 真源纪律节标题去掉"不进任何仓库文件"的自相矛盾表述；`.gitignore` 补 `__pycache__/`、`*.pyc`。理由：夸大或悬空的表述会在下一次对齐工作中再次误导。
+- **SKILL.md backup-manifest 键名对齐**：部署流程指令中的 `DEPLOYED/SSH_TARGET/SERVER_PULLS` 等简写改为模板真实键名（`ZB_DEPLOYED`/`ZB_SSH_TARGET`/`ZB_PULLS` 等，ZB_ 前缀），并注明以模板注释为准。理由：实测核对发现照简写实现会写出无前缀/错名键（`SERVER_PULLS` 并不存在），zedback 消费端会静默读不到。
+
+以下 4 项为 2026-08-12 模拟项目开局/改造链路实测暴露的协作摩擦点：
+
+- **静态站 backup.sh 归属矛盾双修**：SKILL.md 部署落盘清单注明静态站不装 backup.sh（容器栈数据备份脚本，静态站的数据备份由 zedback 经 manifest 的 `ZB_PULLS` 拉取 `dist/` 承担）；`backup.sh.tmpl` 加 data/ 存在性守卫——无 data/ 时日志说明并 exit 0，不产残缺包。理由：实测静态站跑 backup.sh 因 tar 找不到 data/ 直接 exit=1，与静态站部署文档「无数据备份步骤」自相矛盾；守卫让误装也无害。
+- **隐私闸门放行口径与「按项目名填实」对齐**：pre-push 闸门新增 `PROJECT_NAME="<项目名>"` 占位（未替换自动降级为空），放行逻辑同时允许 `/home/<目录名>/` 与 `/home/<项目名>/`（非空时）；audit.py 的 home_allow 改为放行集合，在目录名基础上把项目根 AGENTS.md「项目名称」行的值（中/英文冒号均可）一并纳入；SKILL.md init/adopt 两处 pre-push 安装步骤补「安装时替换 `<项目名>`」。理由：SKILL.md 要求可推导字段（账号 = 项目名）当场填实，但目录名≠项目名时合法的 `/home/<项目名>/` 被自家闸门拦截——实测模拟（目录名≠项目名）验证含 `/home/<项目名>/` 的推送放行、`/home/<其他账号>/` 仍拦截，audit.py 对含该路径的入库文件不再报隐私。
+- **静态部署脚本无构建适配**：`deploy-rsync-static.sh.tmpl` 前置检查从「必须存在 dist/」改为形态适配——有 dist/ 推 dist/（构建型），无 dist/ 推站点根网页文件（index.html 与 css/ 等，无构建型），模板注释写明两种形态。理由：实测发现无构建纯静态站没有 dist/，硬性前置检查使部署第一步即断。
+- **backup-manifest 模板补静态站说明**：`backup-manifest.conf.tmpl` 注释注明静态站改 `ZB_PULLS="dist/"`（或站点产物目录），容器栈保持默认 `data/ backups/ .env`。理由：默认值面向容器栈，静态站无 data/.env，照抄会导致服务器数据拉取清单为空。
+
 ## [0.5.9] - 2026-08-11
 
-- **维护纪律修正：实测依据匿名化**。此前 0.3.4/0.5.8 等版本的 CHANGELOG、commit message、Release notes 在"实测依据"中含用户项目可识别信息（项目名/内部任务编号/项目内路径），已连 git 历史一起改写清除（rebase + force push + Release notes 修订）；AGENTS.md 红线新增第 6 条把匿名化固化为维护规则。理由：公开仓库里可识别信息与隐私同罪，仅靠"不含密钥"的标准不够。
+- **维护纪律修正：实测依据匿名化**。此前 0.3.x/0.5.8 等早期版本的 CHANGELOG、commit message、Release notes 在"实测依据"中含用户项目可识别信息（项目名/内部任务编号/项目内路径），已连 git 历史一起改写清除（rebase + force push + Release notes 修订）；AGENTS.md 红线新增第 6 条把匿名化固化为维护规则。理由：公开仓库里可识别信息与隐私同罪，仅靠"不含密钥"的标准不够。
 
 ## [0.5.8] - 2026-08-11
 

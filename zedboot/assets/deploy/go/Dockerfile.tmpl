@@ -13,7 +13,7 @@
 # ============================================================
 
 # ---- 阶段 1: builder（编译）----
-FROM golang:1.22-alpine AS builder
+FROM golang:1.24-alpine AS builder
 WORKDIR /src
 # 先拷依赖清单再下载，依赖未变化时命中构建缓存
 COPY go.mod go.sum ./
