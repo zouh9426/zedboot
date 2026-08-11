@@ -30,7 +30,7 @@ description: 项目开局编排器。从零创建项目时一次性装好三套�
 
 ## 依赖自检（任何工作流的第一步）
 
-1. **zedui 自检**（项目有界面时）：按上面的环境探测规则查找 name 为 `zedui` 的 SKILL.md。找到 → 记录其路径备用；找不到 → **明确提示用户安装 zedui**（https://github.com/zouh9426/zedui），并告知 UI 支线暂停，管理体系与部署体系不受影响继续走。不要试图自己替代 zedui 定 UI 规范。
+1. **zedui 自检**（项目有界面时）：按上面的环境探测规则查找 name 为 `zedui` 的 SKILL.md（name 比对不区分大小写，兼容改名前安装的旧副本）。找到 → 记录其路径备用；找不到 → **明确提示用户安装 zedui**（https://github.com/zouh9426/zedui），并告知 UI 支线暂停，管理体系与部署体系不受影响继续走。不要试图自己替代 zedui 定 UI 规范。
 2. **GitHub 认证探测**（可部署/混合项目）：`gh auth status` 或检查 `~/.ssh/` 已有 key 与 `ssh -T git@github.com`。已配好 → 只确认账号，不问凭据；没配 → 在信息采集时给用户一次性配置指引，或允许"暂用本地 Git，远程待补"。
 3. **Git 本体探测**（所有项目）：`git --version`。不可用 → 给两个选项：引导安装（macOS：`xcode-select --install`）；或登记"暂不启用 Git"——则第 1 步的 Git 与隐私防线条目整组跳过 + 登记 TODO 待补，其余体系照常（与 zedui 缺失的降级风格一致）。
 

@@ -19,7 +19,7 @@
 
 ## 第 2 步：检查已有安装
 
-在技能目录下逐层找 `SKILL.md`，读 frontmatter 的 `name:` 字段，检查以下 skill 是否已安装（**按 name 匹配，不按目录名**——目录名可能与 skill 名不同）：
+在技能目录下逐层找 `SKILL.md`，读 frontmatter 的 `name:` 字段，检查以下 skill 是否已安装（**按 name 匹配，不按目录名**——目录名可能与 skill 名不同；name 比对不区分大小写）：
 
 | skill 名 | 作用 | 必需性 |
 |---|---|---|

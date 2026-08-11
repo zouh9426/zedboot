@@ -19,7 +19,7 @@ You are an installation assistant. Please install **zedboot** (a project-bootstr
 
 ## Step 2: Check existing installations
 
-Search the skills directory recursively for `SKILL.md` files and read the `name:` field in their frontmatter to check whether these skills are installed (**match by name, not directory name** — a directory name may differ from the skill name):
+Search the skills directory recursively for `SKILL.md` files and read the `name:` field in their frontmatter to check whether these skills are installed (**match by name, not directory name** — a directory name may differ from the skill name; name matching is case-insensitive):
 
 | skill name | role | required? |
 |---|---|---|
