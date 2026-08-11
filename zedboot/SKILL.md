@@ -129,6 +129,7 @@ ops.md 不进 Git、没有版本备份——落盘时提醒用户为它配独立
 
 - 缺的补：走 init 同款模板。
 - 有的合：旧 README/TODO 的有效内容搬进新结构，旧文件归档进 `archive/`，索引记录替代关系。
+- 管理规范副本的版本对齐：`docs/project/PROJECT_RULES.md` 用 `references/project-rules-compact.md` 全文重拷对齐到当前版（项目本地增补需保留时提示人工合并）；若项目同时随装了完整参考版（`docs/reference/PROJECT_RULES_REFERENCE.md`），必须同步用 `references/project-rules-reference.md` 重拷——两份副本的版本号与署名保持一致，只更新精简版会留下旧版残留。顺带 grep 项目入库文件中的本 Skill 历史名称（旧名 ZeroWeave），命中即更新为当前名。
 - 部署体系：已有 Docker 但缺纪律 → 只补账号/rsync/备份与文档；已有全套异构部署 → 按 B 的用户裁决执行（迁移 or 仅文档对齐）；同时补生成 `docs/private/backup-manifest.conf`（已存在则跳过）。
 - UI：无 DESIGN.md → 自检 zedui 后调起其 Phase 0；有 DESIGN.md → 只登记不重定。
 - pre-push 隐私闸门（项目已启用 Git 时）：`.git/hooks/pre-push` 不存在则用 `assets/hooks/pre-push.tmpl` 安装（复制后 `chmod +x`）；已存在则跳过并提示人工合并；装完按 init 第 1 步同款探测 `core.hooksPath`，非空且无法确认全局钩子会链式调用项目级钩子时，醒目警告用户并记入 PROJECT_STATE（同样用 `~/…` 相对表达，不写本机绝对路径）。
