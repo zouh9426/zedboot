@@ -8,6 +8,7 @@
 
 - **备份清单模板**：新增 `assets/project/backup-manifest.conf.tmpl`，init 第 2 步与 adopt 第 C 步生成 `docs/private/backup-manifest.conf`（ZB_* 键值，含服务器真实值，随 docs/private/ 一并 gitignore）；SKILL.md 的 Phase 0.C、init、adopt、文件索引四处同步。理由：zedback 每日备份改为按清单驱动服务器数据拉取，项目登记信息从备份脚本硬编码迁回各项目本地私有文件，新部署项目纳入备份不再需要改备份脚本。
 - **zedui 检测匹配值大小写跟进**：上游 zedui frontmatter `name:` 由小写 `zedui` 改为品牌大小写 `zedui`，SKILL.md 依赖自检与 SETUP 双语检测表的匹配值同步为 `zedui`，自检与 SETUP 的匹配规则补充"不区分大小写"以兼容改名前安装的旧副本。理由：上游更名跟进，避免依赖自检失配；小修不新开版本，并入 0.5.5。
+- **环境探测补 `find -L` 说明**：SKILL.md 按名识别规则与 SETUP 双语第 2 步补充"用 `find` 时加 `-L` 跟随符号链接"。理由：端到端实测发现裸 `find` 不跟随符号链接，会把符号链接安装的 skill（含本 skill 与 zedui）整棵漏掉。
 
 ## [0.5.4] - 2026-08-11
 
