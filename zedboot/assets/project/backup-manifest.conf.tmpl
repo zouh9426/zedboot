@@ -1,0 +1,11 @@
+# backup-manifest.conf — zedback 每日备份登记清单（由 zedboot 开局/改造时生成）
+# 本文件含服务器真实值（IP/账号/密钥路径），必须留在 docs/private/（已 gitignore），永不入库。
+# zedback 每日备份时 source 本文件；键名一律 ZB_ 前缀，请勿改动键名。
+ZB_DISPLAY_NAME="<项目名>"              # 备份包内 项目/ 下的目录名
+ZB_GITHUB_REPO="<GitHub仓库名>"         # 无公开仓库留空 ""
+ZB_DEPLOYED=true                       # 已部署到服务器=true；有部署配置但未上线=false
+ZB_SSH_TARGET="<DEPLOY_USER>@<PRODUCTION_SERVER_IP>"   # 或 ~/.ssh/config 里的别名
+ZB_SSH_KEY="<DEPLOY_KEY>"              # 私钥文件名（相对 ~/.ssh），灾难恢复随包携带，必填
+ZB_SERVER_DIR="/opt/<项目名>"
+ZB_PULLS="data/ backups/ .env"         # 相对 SERVER_DIR 的拉取清单：目录以 / 结尾，文件不带 /
+ZB_SERVER_NOTE="<服务器自带备份策略一句话>"  # 原样写进包内 SERVER.md，可补充站点/多账号等说明

@@ -2,6 +2,12 @@
 
 本项目所有值得记录的变更都写在这里。格式约定：每条目回答两个问题——**改了什么**、**为什么这么改（决策理由）**。
 
+## [0.5.5] - 2026-08-11
+
+新增 zedback 联动：开局/改造时产出备份清单，服务器项目纳入每日备份零脚本改动。
+
+- **备份清单模板**：新增 `assets/project/backup-manifest.conf.tmpl`，init 第 2 步与 adopt 第 C 步生成 `docs/private/backup-manifest.conf`（ZB_* 键值，含服务器真实值，随 docs/private/ 一并 gitignore）；SKILL.md 的 Phase 0.C、init、adopt、文件索引四处同步。理由：zedback 每日备份改为按清单驱动服务器数据拉取，项目登记信息从备份脚本硬编码迁回各项目本地私有文件，新部署项目纳入备份不再需要改备份脚本。
+
 ## [0.5.4] - 2026-08-11
 
 符号链接部署模式经实测验证生效，AGENTS.md 回退预案降级为极端情况保留。
