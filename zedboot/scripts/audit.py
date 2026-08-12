@@ -938,12 +938,42 @@ def _project_name_from_agents(root):
     return None
 
 
+# 服务器账号键（ops.md「机器可读字段」节）：键后中/英文冒号均可，取冒号后第一个
+# 非空格词；与 pre-push 闸门同一格式口径（闸门先把全角冒号归一化再按 ASCII 解析，
+# Python 原生 UTF-8 正则无需归一化）。
+_OPS_SERVER_ACCOUNT_RE = re.compile(
+    r"^\s*[-*]?\s*服务器账号\s*[：:]\s*([^\s<>]+)"
+)
+
+
+def _server_accounts_from_ops(root):
+    """从项目根 docs/private/ops.md「机器可读字段」节提取「服务器账号」值。
+
+    服务器账号是第三个独立事实（仓库目录名 ≠ 项目名 ≠ 服务器账号，见 SKILL.md
+    存储纪律「三事实分离」），登记在 ops.md 一次，pre-push 闸门与 audit.py 各自读取。
+    占位符（含 < >）不入放行集合；ops.md 缺失 / 不可读 / 无该键返回空列表。
+    """
+    rel = _find_file(root, "docs", "private", "ops.md")
+    if rel is None:
+        return []
+    text = _read_text(os.path.join(root, rel))
+    if text is None:
+        return []
+    out = []
+    for line in text.splitlines():
+        m = _OPS_SERVER_ACCOUNT_RE.match(line.strip())
+        if m:
+            out.append(m.group(1))
+    return out
+
+
 def _scan_text_privacy_hits(text, home_allow=None):
     """扫描文本内容，返回 {命中类型: [行号...]}（每行每类只计一次）。
 
-    home_allow：可推导部署账号名集合（默认含项目目录名；若项目根 AGENTS.md 声明了
-    「项目名称」则一并加入）。/home/<其中的名字>/ 是部署体系约定的服务器端可推导
-    路径（存储纪律允许写入入库文档），不视为本机路径泄露。
+    home_allow：可推导/已登记部署账号名集合——项目目录名 + 项目根 AGENTS.md「项目
+    名称」+ ops.md「机器可读字段」登记的服务器账号（三事实分离，各自独立放行）。
+    /home/<其中的名字>/ 是部署体系约定的服务器端可推导/已登记路径（存储纪律允许
+    写入入库文档），不视为本机路径泄露。
     """
     hits = {}
     for lineno, line in enumerate(text.splitlines(), 1):
@@ -1058,6 +1088,9 @@ def detect_committed_secrets(root):
     pn = _project_name_from_agents(root)
     if pn:
         home_allow.add(pn)
+    # 服务器账号（第三独立事实，见存储纪律三事实分离）：ops.md「机器可读字段」登记
+    for acc in _server_accounts_from_ops(root):
+        home_allow.add(acc)
 
     if files is not None:
         # git 仓库：扫跟踪清单

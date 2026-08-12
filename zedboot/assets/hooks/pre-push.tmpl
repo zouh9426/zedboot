@@ -10,6 +10,11 @@
 #   3. 公网 IPv4（已排除私网/回环/链路本地/RFC 5737 文档示例段）
 # 口径：宁漏勿滥——只拦高置信度模式；"疑似"级检查交给 audit.py 与人工复核，
 #   拦错的闸门会被 --no-verify 绕过，形同虚设。
+# 放行口径（三事实分离）：仓库目录名、项目名、服务器账号是三个独立事实，不得混为
+#   一谈——/home/<仓库目录名>/、/home/<项目名>/（安装时替换）与 ops.md「机器可读
+#   字段」登记的 /home/<服务器账号>/ 均为合法/已登记的服务器端路径，一并放行；
+#   服务器账号在运行时读 docs/private/ops.md（gitignore 的本地文件），安装时无需
+#   为账号做任何配置，ops.md 缺失时静默降级。
 # 真实运维值（IP/端口/密钥路径等）应写入本地 docs/private/ops.md（gitignore），不入库。
 # 确认误报时：git push --no-verify 绕过，并把误报样本反馈给模板维护方。
 # ============================================================
@@ -28,11 +33,29 @@ case "$PROJECT_NAME" in *"<"* ) PROJECT_NAME="";; esac
 # 可推导路径（账号 = 项目名），不算本机路径泄露——放行语义与 audit.py 的 home_allow 对齐。
 # 注意：hook 路径正则要求尾部斜杠、匹配范围比 audit.py 窄（宁漏勿滥的有意设计），
 # 边界情形放行，交给 audit.py 与人工复核兜底
-REPO_NAME="$(basename "$(git rev-parse --show-toplevel 2>/dev/null || pwd)")"
+# 仓库根与目录名：git 语义取 toplevel（钩子由 git 在仓库根运行，此兜底防非仓库环境）；
+# ops.md 的定位与 /home/<目录名>/ 放行都相对 REPO_ROOT 计算
+REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+REPO_NAME="$(basename "$REPO_ROOT")"
 
 # 统一按字节处理：避免 BSD grep 在 UTF-8 locale 下对多字节内容切分错位
 LC_ALL=C
 export LC_ALL=C
+
+# 服务器账号（第三独立事实）：仓库目录名 ≠ 项目名 ≠ 服务器账号，三者可互不相同；
+# 账号登记在项目根 docs/private/ops.md「机器可读字段」节（`- 服务器账号: <值>` 单行，
+# 键后中/英文冒号均可，取冒号后第一个非空格词），闸门运行时读取——安装时无需为
+# 账号做任何配置。ops.md 缺失（尚未开局/改造完成的项目）时静默降级为空集，
+# 仅放行目录名/项目名派生路径（宁漏勿滥的保守口径）。
+DEPLOY_ACCOUNTS=""
+OPS_MD="$REPO_ROOT/docs/private/ops.md"
+if [ -f "$OPS_MD" ]; then
+  # 字节口径：先把全角冒号归一化为半角再按 ASCII 解析（LC_ALL=C 下多字节字符类
+  # [：:] 会按字节切分产生乱码，先归一化是唯一字节安全的做法）
+  DEPLOY_ACCOUNTS="$(sed 's/：/:/g' "$OPS_MD" 2>/dev/null \
+    | sed -nE '/[<>]/d; s/^[[:space:]]*[-*]?[[:space:]]*服务器账号[[:space:]]*:[[:space:]]*([^[:space:]]+).*/\1/p' \
+    || true)"
+fi
 
 report() {  # $1=命中类型  $2=提交范围
   echo "[pre-push 隐私闸门] 拦截：$1（范围：$2）" >&2
@@ -44,8 +67,16 @@ while read -r local_ref local_sha remote_ref remote_sha; do
   [ "$local_sha" = "$ZERO_SHA" ] && continue
 
   if [ "$remote_sha" = "$ZERO_SHA" ]; then
-    range_desc="$local_ref 全部历史（首次推送）"
-    revs="$local_sha"
+    # 新引用（新分支/新 tag）：远程已有引用时只扫"远程还没有的提交"——
+    # 旧历史是此前已被接受的内容（含闸门启用前的遗留值），不应在每次新发
+    # tag 时重复拦截；远程全空（真·首次推送）时退化为全历史扫描。
+    if [ -n "$(git for-each-ref refs/remotes/ 2>/dev/null)" ]; then
+      range_desc="$local_ref 远程未有的提交（新引用）"
+      revs="$local_sha --not --remotes"
+    else
+      range_desc="$local_ref 全部历史（首次推送）"
+      revs="$local_sha"
+    fi
   else
     range_desc="${remote_sha:0:7}..${local_sha:0:7}"
     revs="${remote_sha}..${local_sha}"
@@ -61,7 +92,8 @@ while read -r local_ref local_sha remote_ref remote_sha; do
   fi
 
   # 2. 本机绝对路径（/Users/<名字>/、/home/<名字>/；占位符含 < 不会命中；
-  #    /home/<目录名>/ 与 /home/<项目名>/（已替换时）为可推导服务器路径，放行——
+  #    放行集合 = /home/<目录名>/ + /home/<项目名>/（已替换时） + ops.md 登记的
+  #    /home/<服务器账号>/（三事实分离，各自独立放行）——
   #    语义与 audit.py home_allow 对齐，但 hook 正则要求尾部斜杠、匹配范围比
   #    audit.py 窄，边界情形宁漏勿滥）
   bad_path=""
@@ -69,6 +101,11 @@ while read -r local_ref local_sha remote_ref remote_sha; do
     [ "$p" = "/home/${REPO_NAME}/" ] && continue
     if [ -n "$PROJECT_NAME" ] && [ "$p" = "/home/${PROJECT_NAME}/" ]; then
       continue
+    fi
+    if [ -n "$DEPLOY_ACCOUNTS" ]; then
+      for a in $DEPLOY_ACCOUNTS; do
+        [ "$p" = "/home/${a}/" ] && continue 2
+      done
     fi
     bad_path="$p"
     break
