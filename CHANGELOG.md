@@ -2,25 +2,21 @@
 
 本项目所有值得记录的变更都写在这里。格式约定：每条目回答两个问题——**改了什么**、**为什么这么改（决策理由）**。
 
-## [0.8.2] - 2026-08-15
-
-多场景实测驱动的修复版（Python init / 纯 HTML 静态站 init / Go adopt 三条链路端到端实测，含部署模拟与 pre-push 实测）。实战结论：三条链路全通，发现的问题均为模板/文档级小项，无架构问题。
-
-- **模板与校验器打架三处修复**：TODO.md.tmpl / DECISION_LOG.md.tmpl 的"编号格式"说明行、backup.sh.tmpl 的注释示例自带尖括号中文占位符（`<项目代码>`/`<项目名>`），忠实落盘必触发 verify.py 占位符 FAIL——两个测试员独立踩中。改为示例式/英文占位写法（`XXX-001`、`<PROJECT_NAME>`），语义不变。理由：模板的第一要务是照做不翻车。
-- **deployment-static.md.tmpl 纯 HTML 文案补漏**：0.8.1 修了 static/README 与 checklist 的 npm run build 文案，独漏生成给项目日常读的 deployment.md（发布/恢复两处命令链）——纯 HTML 项目照抄必失败，已改"有构建步骤先构建、纯 HTML 直接执行"口径。理由：同一口径的修复必须覆盖所有落地文件，漏一个就等于没修。
-- **文档/模板小项十处**：AGENTS 模板悬空 bullet 删除；隐私指针从 skill 内部路径（装后悬空引用）改指项目内 docs/guides/deployment.md；deploy.env.tmpl 补 STATIC_OUTPUT_DIR 安装时填值指引（纯 HTML 首部署必踩 fail-closed 的预防）；info-collection 模式枚举补"静态站归入可部署代码项目"；init-workflow 补"部署件未提交前勿 git reset/stash"警示与 Go 栈 go.sum 前置说明；adopt-workflow 补"仅 git rm --cached 不重写历史时首次 push 必被拦"预告；deploy-rsync 尾行"自动迁移"标注适用范围；backup-manifest 注释说明 ZB_SSH_KEY 与 DEPLOY_KEY 同键不同形；backup-manifest 头部注释同步 zedback"纯数据解析、绝不 source"的消费方式（维护者先行改动，本版一并入库）。
-- **实战记录备查**（未修项与理由）：rsync 排除 `.env*` 连 `.env.example` 一起排（服务器不需要该模板，可接受的保守）；audit 对子目录 env 变体只报 basename（不影响处置）；模板"落盘时删除"的 HTML 注释若漏删会触发 verify FAIL（属预期——verify 替你抓到没删干净）。
-
-测试：97 个 unittest 用例全绿。
-
 ## [0.8.1] - 2026-08-15
 
-外部第六、七轮审查驱动的修复版（两项审查均先实测复现再修）。不加功能、不动 Docker 三档架构。
+多场景实测驱动的修复版（审查主张均先实测复现再修；实战覆盖 Python init / 纯 HTML 静态站 init / Go adopt 三条链路端到端，含部署模拟与 pre-push 实测）。不加功能、不动 Docker 三档架构。
+
+追加修复（三链路实测暴露的模板/文档级问题）：
+
+- **模板与校验器打架三处修复**：TODO.md.tmpl / DECISION_LOG.md.tmpl 的"编号格式"说明行、backup.sh.tmpl 的注释示例自带尖括号中文占位符（`<项目代码>`/`<项目名>`），忠实落盘必触发 verify.py 占位符 FAIL——两个测试员独立踩中。改为示例式/英文占位写法（`XXX-001`、`<PROJECT_NAME>`），语义不变。理由：模板的第一要务是照做不翻车。
+- **deployment-static.md.tmpl 纯 HTML 文案补漏**：本轮前半段修了 static/README 与 checklist 的 npm run build 文案，独漏生成给项目日常读的 deployment.md（发布/恢复两处命令链）——纯 HTML 项目照抄必失败，已改"有构建步骤先构建、纯 HTML 直接执行"口径。理由：同一口径的修复必须覆盖所有落地文件，漏一个就等于没修。
+- **文档/模板小项十处**：AGENTS 模板悬空 bullet 删除；隐私指针从 skill 内部路径（装后悬空引用）改指项目内 docs/guides/deployment.md；deploy.env.tmpl 补 STATIC_OUTPUT_DIR 安装时填值指引（纯 HTML 首部署必踩 fail-closed 的预防）；info-collection 模式枚举补"静态站归入可部署代码项目"；init-workflow 补"部署件未提交前勿 git reset/stash"警示与 Go 栈 go.sum 前置说明；adopt-workflow 补"仅 git rm --cached 不重写历史时首次 push 必被拦"预告；deploy-rsync 尾行"自动迁移"标注适用范围；backup-manifest 注释说明 ZB_SSH_KEY 与 DEPLOY_KEY 同键不同形；backup-manifest 头部注释同步 zedback"纯数据解析、绝不 source"的消费方式（维护者先行改动，本版一并入库）。
+- **实战记录备查**（未修项与理由）：rsync 排除 `.env*` 连 `.env.example` 一起排（服务器不需要该模板，可接受的保守）；audit 对子目录 env 变体只报 basename（不影响处置）；模板"落盘时删除"的 HTML 注释若漏删会触发 verify FAIL（属预期——verify 替你抓到没删干净）。
 
 追加修复（pre-push 语义钉死 + 部署契约收尾）：
 
 - **pre-push force-push fail-open 修复（P0）**：existing-ref 分支的 `remote_sha..local_sha` 中 remote_sha 是远端对象 ID、不保证在本地对象库（force-push 独立历史场景），`git log` fatal 被 `2>/dev/null || true` 吞掉 → 扫描为空即放行。修复：推送前 `git cat-file -e "${remote_sha}^{commit}"` 验证，不存在即拒（提示先 fetch）；两处 git log 改为捕获退出码、非零 fail-closed 拦截，"扫描失败"不再被解释成"扫描无命中"。新增 force-push E2E 回归（先红后绿）。理由：与 0.7.0 修的引号 bug 同一根因类——吞错误码的闸门必然 fail-open。
-- **pre-push merge 语义修正（P1）**：v0.8.1 前半段的 `-m` 让 merge commit 对每个父各出一次 diff，会把第一父侧已接受的旧内容（如已推送的公网 IP）当新增误拦；两处扫描改 `--diff-merges=first-parent`（遍历完整历史，merge 只相对第一父出 diff）。三个场景实测：误报场景放行、冲突解决塞私钥拦、侧分支泄露拦。新增误报对照用例。
+- **pre-push merge 语义修正（P1）**：前半段的 `-m` 让 merge commit 对每个父各出一次 diff，会把第一父侧已接受的旧内容（如已推送的公网 IP）当新增误拦；两处扫描改 `--diff-merges=first-parent`（遍历完整历史，merge 只相对第一父出 diff）。三个场景实测：误报场景放行、冲突解决塞私钥拦、侧分支泄露拦。新增误报对照用例。
 - **diff-filter ACR → ACMRT（P1）**：C=Copied 而非 Modified——已跟踪 .env* 修改值在 ACR 下无输出可绕过路径闸门；ACMRT 补齐修改与 type-change。新增"已跟踪 .env.production 改值必拦"用例。
 - **CI 红修复（Release Blocker）**：test_pre_push.py 新用例的 `git merge --no-ff` 未注入 identity，CI 无全局 git 配置五矩阵全红（本机绿是因为本机有全局 identity）；fixture 建仓统一本地 `git config user.name/email`。
 - **静态 manifest 双拼修复（P1，前半段引入）**：ZB_SERVER_DIR=<REMOTE_DIR> 与静态站 REMOTE_DIR=/opt/<项目名>/dist 组合下，zedback 直拼出 .../dist/dist。模板改分栈指引：容器栈 ZB_SERVER_DIR=REMOTE_DIR；静态站 ZB_SERVER_DIR=REMOTE_DIR 父目录、ZB_PULLS=发布目录名。
@@ -51,7 +47,7 @@
 - **静态站发布目录越界防护（P1）**：0.7.0 的 fail-closed 只防"目录缺失"，`STATIC_OUTPUT_DIR=.` 或 `../x` 仍可指回项目根或越出项目；新增 canonical path 校验（`cd + pwd -P` POSIX 便携写法），发布目录必须是项目真子目录。新增 `tests/test_deploy.py`（7 例：deploy.env 缺失报错、五事实注入、越界拒绝等，fake rsync 捕获实参）。
 - **backup.sh SQLite 路径不再从目录名推导（P1）**：`SQLITE_DB` 改为显式变量（默认 `${DATA_DIR}/app.db`，注释指引与 DATABASE_URL 对齐），basename 只留作备份包命名；库文件缺失从静默跳过改为输出提示。理由：服务器目录名 ≠ 数据库文件名，推导失败时一致性备份静默不执行。
 - **Prisma 7 配置兼容（P1）**：prisma-cli stage `COPY prisma ./prisma` → `COPY prisma* ./`，prisma.config.ts/js/mjs 可进 CLI stage（prisma/ 恒存在，通配不会空匹配失败）。
-- **部署契约漂移清理（P1/P2）**：容器版 deployment.md.tmpl 删除 0.5.7 时代的内联 rsync 命令块，改为 `git push && ./deploy-rsync.sh`（文档引用脚本、脚本负责实现，根除双写漂移）；go-live-checklist 容器条目同步 deploy.env 口径；裸 `DEPLOYED=true` 残留改 `ZB_DEPLOYED`；项目 AGENTS 模板自检命令改 `git ls-files -coz | xargs -0`（NUL-safe）并补 deploy.env 隐私指针；init 补 Go 主包检测指引；静态站"一律 dist"残留按框架口径清理。
+- **部署契约漂移清理（P1/P2）**：容器版 deployment.md.tmpl 删除 0.5.8 时代的内联 rsync 命令块，改为 `git push && ./deploy-rsync.sh`（文档引用脚本、脚本负责实现，根除双写漂移）；go-live-checklist 容器条目同步 deploy.env 口径；裸 `DEPLOYED=true` 残留改 `ZB_DEPLOYED`；项目 AGENTS 模板自检命令改 `git ls-files -coz | xargs -0`（NUL-safe）并补 deploy.env 隐私指针；init 补 Go 主包检测指引；静态站"一律 dist"残留按框架口径清理。
 
 ## [0.7.0] - 2026-08-14
 
@@ -92,7 +88,7 @@
 - **description 触发范围收紧**：英文触发尾句由「starting a new project from scratch」改为「用户明确要求用 zedboot 初始化/改造」并加反向约束（用户只是要开个新编码项目时不触发）。理由：description 是 Agent 自动选 Skill 的主要依据，原措辞会在「帮我做个 Todo App」这类场景泛触发一个会写十几个文件、建仓库的重型 Skill。
 - **SKILL.md 瘦身，回归控制器形态**（23394 B → 8669 B）：Phase 0 采集细则、init/adopt 两 workflow 的逐步细则逐字迁出至 `references/info-collection.md`、`references/init-workflow.md`、`references/adopt-workflow.md`（仅交叉引用改写为文件名指针，规则文字零改动）；SKILL.md 保留模式判断、环境探测、依赖自检、六组信息概要与三条红线、workflow 骨架、硬性规则、文件索引，并注明「执行到哪步读哪份」。理由：Agent Skills 规范建议控制器约 5000 tokens 内、细节渐进式披露；审核指出 SKILL.md 塞了过多实现细节。附带收益：装后校验接入点（下条）在控制器与细则中各出现一次，层级清晰。
 - **新增 `scripts/verify.py` 装后机械校验**（纯标准库、绝对只读、--json、git 命令带超时、无法确认一律 WARN/SKIP 不臆断，与 audit.py 同口径）：管理文件齐备、中文占位符残留、`.gitignore` 含 `.env` 且 `.env` 未被跟踪、pre-push 闸门就位（含 core.hooksPath 探测）、按项目模式校验部署产物、入库文件私钥头快扫，任何 FAIL 即 exit 1；init 第 4 步与 adopt D 步接入为收口动作。理由：安装正确性此前只有提示词级保证（instruction-level idempotence ≠ actual idempotence），装后机械校验用约两成工程量拿到确定性验收的大头收益；自测两个假项目（装全 / 缺漏坏）exit 0/1 与逐项报告均符合预期。
-- **audit.py fixture 测试矩阵重建并入库**：0.5.7 声称的「10 项 fixture 测试矩阵」从未提交、测试资产丢失；现重建为 `tests/`（6 静态 fixture + 4 动态 fixture，27 个 unittest 用例：跑通/JSON 合法/只读性快照对比/探测正确性抽查），新增 CI `tests.yml`（push/PR 触发，Python 3.8–3.12 矩阵）。fixture 的隐私测试值（私钥头、.env、本机路径）全部运行时拼接/动态构造，不入库字面量，与全局 pre-push 隐私闸门兼容。理由：Skill 复杂度早已超过「零测试」能兜住的水平；fixture 不入库等于每次改动都靠回忆回归。
+- **audit.py fixture 测试矩阵重建并入库**：0.5.8 声称的「10 项 fixture 测试矩阵」从未提交、测试资产丢失；现重建为 `tests/`（6 静态 fixture + 4 动态 fixture，27 个 unittest 用例：跑通/JSON 合法/只读性快照对比/探测正确性抽查），新增 CI `tests.yml`（push/PR 触发，Python 3.8–3.12 矩阵）。fixture 的隐私测试值（私钥头、.env、本机路径）全部运行时拼接/动态构造，不入库字面量，与全局 pre-push 隐私闸门兼容。理由：Skill 复杂度早已超过「零测试」能兜住的水平；fixture 不入库等于每次改动都靠回忆回归。
 - **装进项目的 AGENTS.md 模板改分层阅读**：原「强制阅读顺序」6 份文件（约 24 KB 固定开销）改为「每次任务必读小文件（AGENTS/STATE/TODO/任务引用，约 6 KB）+ 按触发读大部头（PROJECT_RULES 流程裁决与同步时、INDEX 定位资源时、deployment.md 部署时、DESIGN.md UI 时等）」；README 双语「不增加日常 token 负担」改为如实的分层加载口径。理由：审核指出原表述与强制阅读清单的实际 context 成本矛盾，名不副实。
 - **装前自检（0.6.0 发布前第一遍复查）四处修复**：①管理规范两份文件的阅读口径同步为分层加载——compact §0.1 旧口径「按 AGENTS 顺序读 README/规则/索引/状态/TODO」与新模板直接冲突且会随安装拷进每个项目（compact §11.3 本就是新口径，§0.1 属没删干净的旧残留），reference §1.1 与 §5.2 推荐模板同步；②go 栈 entrypoint 三向对齐——go 栈 ENTRYPOINT 烤进镜像、无 docker-entrypoint.sh，init 落盘清单与 chmod 清单注明适用范围、SKILL.md 文件索引措辞修正、verify.py 改为「Dockerfile 引用 docker-entrypoint 才必查」（缺失但 Dockerfile 自含 ENTRYPOINT 判 PASS）；③audit.py docstring 过期指针「SKILL.md 存储纪律」改指 references/info-collection.md；④tests/fixtures 的 .DS_Store 加 .gitignore 例外（防索引重建后 CI 静默翻车）。理由：发布前模拟安装走查发现的真冲突与三向不一致，同步修复避免把矛盾装进新项目。
 - **发布前第二遍端到端模拟验证（沙盒项目实测）一处修复**：`backup.sh.tmpl` 头部注释的 crontab 示例行用了中文占位符（`<分> <时> <项目目录>`），照流程安装的项目会被自己的 verify.py 判占位符残留 FAIL——模板与校验器自相矛盾，示例行已改为英文隔离占位符（`<MIN> <HOUR> <PROJECT_DIR>`，与存储纪律的占位符命名约定一致）。模拟本身结论：init 全流程（管理体系 + python 栈部署体系 + 闸门安装）跑通，verify.py 拦下两处安装漏填（deployment.md 的 `<仓库地址>`/`<DNS托管商>`）并指引修复后全 PASS；pre-push 闸门功能实测——私钥头/本机路径/公网 IP 推送均拦截、干净提交与 RFC 5737 文档段 IP 放行，且在全局 `core.hooksPath` 机器上经全局钩子链式调用实际生效（verify.py 对该场景正确 WARN 提示人工确认）；adopt 全流程跑通——audit.py 正确检出 .env 被跟踪与入库公网 IP，幂等安装后管理文档 1/10 → 10/10、verify 全 PASS；幂等重跑零意外 diff。
@@ -108,7 +104,7 @@
 
 全量审计（模板逐件核对 + audit.py 冒烟实测）后的集中修复。
 
-- **「十项管理文档」口径对齐**：`audit.py` 的 `CORE_MANAGEMENT_DOCS` 此前误含 `DESIGN.md`、漏 `archive/README.md`，与管理规范正典（audit-report 模板与 project-rules-compact §16）错位，adopt 审计的 N/10 计数会与报告模板对不上；已改为正典十项，DESIGN.md 保留在 UI 节单独检查。理由：同一事实两套口径是 0.5.7 口径对齐工作的遗漏，审计输出必须与管理规范逐字一致。
+- **「十项管理文档」口径对齐**：`audit.py` 的 `CORE_MANAGEMENT_DOCS` 此前误含 `DESIGN.md`、漏 `archive/README.md`，与管理规范正典（audit-report 模板与 project-rules-compact §16）错位，adopt 审计的 N/10 计数会与报告模板对不上；已改为正典十项，DESIGN.md 保留在 UI 节单独检查。理由：同一事实两套口径是 0.5.8 口径对齐工作的遗漏，审计输出必须与管理规范逐字一致。
 - **部署模板镜像升 EOL 版本**：Next.js 模板 `node:20-alpine` → `node:22-alpine`（Node 20 已 EOL，22 LTS 支持至 2027-04）；Go 模板 `golang:1.22-alpine` → `golang:1.24-alpine`。理由：用停止安全修复的基础镜像开局等于自带漏洞出生。
 - **文档与注释修正**：CHANGELOG 0.5.9 条目中悬空版本号 0.3.4 改写为 0.3.x（仓库无此版本）；pre-push 与 audit.py 三处"口径一致"注释改为如实描述（hook 正则要求尾部斜杠、匹配范围比 audit.py 窄，属宁漏勿滥的刻意设计）；AGENTS.md 真源纪律节标题去掉"不进任何仓库文件"的自相矛盾表述；`.gitignore` 补 `__pycache__/`、`*.pyc`。理由：夸大或悬空的表述会在下一次对齐工作中再次误导。
 - **SKILL.md backup-manifest 键名对齐**：部署流程指令中的 `DEPLOYED/SSH_TARGET/SERVER_PULLS` 等简写改为模板真实键名（`ZB_DEPLOYED`/`ZB_SSH_TARGET`/`ZB_PULLS` 等，ZB_ 前缀），并注明以模板注释为准。理由：实测核对发现照简写实现会写出无前缀/错名键（`SERVER_PULLS` 并不存在），zedback 消费端会静默读不到。
@@ -126,13 +122,13 @@
 
 ## [0.5.8] - 2026-08-11
 
-adopt 实战（某生产项目第二轮改造验收）暴露的残留缺口修复。
+双场景实战自查（init 模拟 + adopt 模拟）+ adopt 实战（某生产项目第二轮改造验收）暴露的缺陷集中修复：脚本执行位、hooksPath 语义纠错、audit.py 误报治理与覆盖缺口、static 栈模板适配、契约默认值、幂等安装缺口。
+
+adopt 实战残留缺口：
 
 - **adopt 幂等安装补"管理规范副本版本对齐"条目**：`PROJECT_RULES.md` 重拷精简版对齐当前版；项目随装了完整参考版（`docs/reference/PROJECT_RULES_REFERENCE.md`）时必须同步重拷，两份副本版本号与署名保持一致；并 grep 项目入库文件中的本 Skill 历史名称（旧名 ZeroWeave）命中即改。理由：某生产项目第二轮 adopt 实测——精简版署名已对齐 zedboot，参考版仍残留"由 ZeroWeave skill 分发"（第一轮改名前安装的副本，adopt 流程只覆盖了精简版），旧署名将随每次 adopt 在每个改造项目里复发。
 
-## [0.5.7] - 2026-08-11
-
-双场景实战自查（init 模拟 + adopt 模拟各跑一遍完整流程）暴露的缺陷集中修复：脚本执行位、hooksPath 语义纠错、audit.py 误报治理与覆盖缺口、static 栈模板适配、契约默认值。
+实战自查集中修复：
 
 - **部署脚本执行位**：5 个 `.sh.tmpl` 加执行位（git 100644→100755），SKILL.md init 第 2 步补"脚本落盘后统一 `chmod +x`"指示。理由：实测按流程字面执行后 `./deploy-rsync-static.sh` 直接 Permission denied（模板 git mode 644，落盘即不可执行），部署流程第一步即断；chmod 步骤是防模板来源/拷贝方式丢位的兜底。
 - **pre-push 闸门与 audit.py 的路径口径对齐**：闸门第 2 项检查改为逐条比对——`/home/<项目目录名>/`（= 可推导部署账号的服务器端路径）放行，与 audit.py 的 home_allow 口径一致；`/Users/` 与其他 `/home/<名>/` 照拦。理由：二轮回归实测干净 init 项目首次 push 被自己的闸门拦（deployment.md 落地后的 `/home/<项目名>/.ssh/` 假阳性）——上一轮只统一了 IP 口径，路径口径没跟上；拦错的闸门会被 `--no-verify` 绕过，形同虚设。

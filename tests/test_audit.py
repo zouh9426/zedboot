@@ -3,7 +3,7 @@
 """
 audit.py 自动化测试套件（重建 zedboot/scripts/audit.py 丢失的 fixture 测试矩阵）。
 
-覆盖维度（对应 CHANGELOG.md 0.5.7「10 项 fixture 测试矩阵」）：
+覆盖维度（对应 CHANGELOG.md 0.5.8「10 项 fixture 测试矩阵」）：
   ① 对每个 fixture（静态 + 动态）跑通不崩溃（文本模式 + --json 模式双跑）；
   ② --json 输出是合法 JSON 且关键字段存在（audit_tool / scanned_path /
      generated_at / sections 九个节 / unknown_items）；
@@ -405,7 +405,7 @@ class TestRootHygieneAndDeploy(unittest.TestCase):
 
 class TestGitNestingBoundary(unittest.TestCase):
     """嵌套仓库边界：REPO 内的目录（被外层仓库包含）必须按非仓库处理，
-    不得被外层仓库的分支/提交/远程污染（CHANGELOG 0.5.7 第⑥项修复）。"""
+    不得被外层仓库的分支/提交/远程污染（CHANGELOG 0.5.8 第⑥项修复）。"""
 
     def test_inner_dir_not_polluted_by_outer_repo(self):
         target = os.path.join(FIXTURES_DIR, "inner_dir")
@@ -600,7 +600,7 @@ class TestNestedGitRepo(unittest.TestCase):
 
 class TestTruncationNotice(unittest.TestCase):
     """截断提示：超过 2MB 的文件只扫头部，事实记入 truncated_files 与
-    unknown_notes（CHANGELOG 0.5.7 第⑦项修复）。"""
+    unknown_notes（CHANGELOG 0.5.8 第⑦项修复）。"""
 
     @classmethod
     def setUpClass(cls):
