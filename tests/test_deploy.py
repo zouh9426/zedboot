@@ -159,6 +159,24 @@ class TestDeployRsyncScripts(unittest.TestCase):
         self.assertTrue(line.endswith("%s@%s:%s/" % (DEPLOY_USER, SERVER_IP,
                                                      REMOTE_DIR)), line)
 
+    def test_container_ssh_port_default_22(self):
+        """默认 deploy.env（无 SSH_PORT）→ ssh -e 参数含 -p 22（默认 22 兼容旧 deploy.env）。"""
+        script = self._install_container()
+        self._deploy_env()
+        p = _run_script(script, self.env)
+        self.assertEqual(p.returncode, 0, p.stderr)
+        line = self._rsync_log()
+        self.assertIn("-p 22", line)
+
+    def test_container_ssh_port_custom(self):
+        """deploy.env 设 SSH_PORT=2222 → ssh -e 参数含 -p 2222。"""
+        script = self._install_container()
+        self._deploy_env(extra='SSH_PORT="2222"')
+        p = _run_script(script, self.env)
+        self.assertEqual(p.returncode, 0, p.stderr)
+        line = self._rsync_log()
+        self.assertIn("-p 2222", line)
+
     # ---- 静态脚本 ----
     def test_static_pushes_dist_by_default(self):
         """默认发布目录 dist 存在 → exit 0，只推 <项目>/dist/。"""

@@ -13,7 +13,7 @@ zedboot 是一个**项目开局编排 skill**：它自身不定规则、不做�
 | 体系 | 内容 | 安装产物 | 适用范围 |
 |---|---|---|---|
 | 项目管理 | AI-Ready 项目管理规范 v1.4 | `docs/project/` 五件套 + 入口文件 + `archive/` | 所有项目 |
-| 部署 | 专用账号隔离 + Docker + rsync 直推 + 私有 Git 仓库备份 | Dockerfile 等 + `docs/guides/deployment.md` | 仅可部署代码项目 |
+| 部署 | 专用账号 + Docker 权限分档 + rsync 直推 + 私有 Git 仓库备份（standard 档账号隔离不构成宿主机安全边界） | Dockerfile 等 + `docs/guides/deployment.md` | 仅可部署代码项目 |
 | UI | [zedui](https://github.com/zouh9426/zedui) 编排工作流 | `DESIGN.md`（由 zedui 生成） | 仅项目有界面时 |
 
 ## 两条工作流
@@ -26,9 +26,9 @@ adopt（旧项目改造）：只读审计 → 差距报告 → 改造方案（�
 ## 核心设计决策
 
 - **装完即退场**：skill 只在开局/改造时运行一次；日常约束全靠装进项目的 `AGENTS.md` + 管理五件套。日常阅读分层加载：每次任务只必读 `AGENTS.md`/`PROJECT_STATE`/`TODO` 等小文件（合计约 6 KB），规范大部头（PROJECT_RULES 等）按触发条件才读，日常 token 开销可控。
-- **信息采集一次要齐**：项目身份、GitHub、服务器、域名、应用密钥、备份策略六组信息开局一次问清；任何一组可答"待定"，自动生成 TODO 不阻塞流程。**隐私线**：可推导值（账号 = 项目名、`/opt/<项目名>` 目录）落进 `PROJECT_INDEX.md` 外部资源表与部署文档；不可推导运维真实值（IP/SSH 端口/密钥路径/crontab 调度）只存本地 `docs/private/ops.md`（gitignore，永不入库），入库文档只写占位符——项目随时可转 Public 不泄露基础设施指纹。**秘密本体（私钥/密码/token）永不入库，也不进对话上下文**——采集只问键名不问值，值由用户自行落盘，只登记位置与引用。
+- **信息采集一次要齐**：项目身份、GitHub、服务器、域名、应用密钥、备份策略六组信息开局一次问清；任何一组可答"待定"，自动生成 TODO 不阻塞流程。**隐私线**：可推导值（账号 = 项目名，仅建议默认约定，可独立修改，以 deploy.env 为准；`/opt/<项目名>` 目录）落进 `PROJECT_INDEX.md` 外部资源表与部署文档；不可推导运维真实值（IP/SSH 端口/密钥路径/crontab 调度）只存本地 `docs/private/ops.md`（gitignore，永不入库），入库文档只写占位符——项目随时可转 Public 不泄露基础设施指纹。**秘密本体（私钥/密码/token）永不入库，也不进对话上下文**——采集只问键名不问值，值由用户自行落盘，只登记位置与引用。
 - **幂等安装**：adopt 的每个动作都是"检查 → 存在则合并/归档 → 不存在则创建"，跑两遍不出事，允许分次改造；不动业务代码。
-- **审计机械化**：`scripts/audit.py`（纯标准库、只读）做机械探测，探测不到的标 `unknown` 交 AI 判断，不硬猜；装完后 `scripts/verify.py`（同口径）机械校验安装承诺——文件齐备、占位符替换干净（含未提交的新文件）、`.gitignore` 四项与 `.env`/`docs/private/` 未跟踪、闸门就位，有 FAIL 即 exit 1。
+- **审计机械化**：`scripts/audit.py`（纯标准库、只读）做机械探测，探测不到的标 `unknown` 交 AI 判断，不硬猜；装完后 `scripts/verify.py`（同口径）机械校验安装承诺——文件齐备、占位符替换干净（含未提交的新文件）、`.gitignore` 四项与 `.env*`/`docs/private/` 未跟踪、闸门就位，有 FAIL 即 exit 1。
 - **Git 纪律**：每项目一个独立私有仓库；本地 commit 照常，push 只与发布/交付绑定；Git Tag 在部署和线上验证之后打。
 - **UI 规范不越权**：UI 支线委托给 zedui；未安装时明确提示并暂停 UI 支线，其余体系照常。
 

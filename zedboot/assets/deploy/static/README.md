@@ -6,7 +6,7 @@ Vite/Astro → `dist/`，Next.js 静态导出 → `out/`，纯 HTML → 建议 `
 
 ## 部署事实（docs/private/deploy.env）
 
-- 部署五事实（`PROJECT_NAME` / `DEPLOY_USER` / `REMOTE_DIR` / `SERVER_IP` / `DEPLOY_KEY`）统一由
+- 部署六事实（`PROJECT_NAME` / `DEPLOY_USER` / `REMOTE_DIR` / `SERVER_IP` / `DEPLOY_KEY` / `SSH_PORT`）统一由
   本地 `docs/private/deploy.env` 提供（已 gitignore，永不入库；模板见 `assets/project/deploy.env.tmpl`）。
 - 三事实分离：本地目录名 ≠ 项目名 ≠ 服务器账号，脚本不从路径推导部署事实。
 - 发布目录由 `STATIC_OUTPUT_DIR` 控制（Vite/Astro=`dist`、Next.js 静态导出=`out`、纯 HTML=`public`）；
@@ -14,8 +14,8 @@ Vite/Astro → `dist/`，Next.js 静态导出 → `out/`，纯 HTML → 建议 `
 
 ## 流程
 
-1. **本地构建**：`npm run build`，产物输出到发布目录（`dist/` / `out/` / `public/`）
-2. **配置 deploy.env**：在 `docs/private/deploy.env` 填好五事实；`REMOTE_DIR` 填服务器发布目录
+1. **本地准备**：有构建步骤的项目先构建（`npm run build`），产物输出到发布目录（`dist/` / `out/`）；纯 HTML 无构建，直接维护 `public/` 后执行部署脚本
+2. **配置 deploy.env**：在 `docs/private/deploy.env` 填好六事实；`REMOTE_DIR` 填服务器发布目录
    （静态站如 `/opt/<项目名>/dist`）；发布目录非默认时加一行 `STATIC_OUTPUT_DIR="out"`（或 `public`）
 3. **本地直推**：执行 `deploy-rsync-static.sh.tmpl`（落地为脚本），只把发布目录 rsync 到服务器
 4. **服务器伺服**：共享 Caddy 直接以文件伺服该目录，**不走容器**，无需 docker

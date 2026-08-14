@@ -42,7 +42,7 @@ compatibility: Requires Python 3.8+ (audit/verify scripts). Git is recommended a
 本 Skill 只跑一次，开局一次性把信息要齐：**A 项目身份 / B Git·GitHub / C 服务器 / D 域名 / E 应用密钥 / F 备份策略**六组；B~F 任何一组都可答"待定"（自动生成 TODO，不阻塞流程）。三条红线先记住：
 
 - **密钥采集只问键名不问值**——绝不让用户把 key 值贴进对话；秘密本体不进聊天上下文、永不入库，值由用户自行落盘 `.env`。
-- 运维真实值（IP / SSH 端口 / 密钥真实路径 / crontab 调度）只存本地 `docs/private/ops.md`（gitignore），入库文件一律写占位符；部署脚本消费的五事实另存 `docs/private/deploy.env`（同为 gitignore，永不入库）。
+- 运维真实值（IP / SSH 端口 / 密钥真实路径 / crontab 调度）只存本地 `docs/private/ops.md`（gitignore），入库文件一律写占位符；部署脚本消费的六事实另存 `docs/private/deploy.env`（同为 gitignore，永不入库）。
 - 可推导值（账号 = 项目名、`/opt/<项目名>` 目录）可直接入库。
 
 → 六组采集项明细、"待定"机制、存储纪律、三事实分离、转 Public 前置：**执行 Phase 0 前必读 `references/info-collection.md`**。

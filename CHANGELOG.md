@@ -4,7 +4,21 @@
 
 ## [0.8.1] - 2026-08-15
 
-外部前轮审查驱动的修复版（审查对象 v0.8.0；两项 P0 均经实测复现确认）。不加功能、不动 Docker 三档架构。
+外部第六、七轮审查驱动的修复版（两项审查均先实测复现再修）。不加功能、不动 Docker 三档架构。
+
+追加修复（pre-push 语义钉死 + 部署契约收尾）：
+
+- **pre-push force-push fail-open 修复（P0）**：existing-ref 分支的 `remote_sha..local_sha` 中 remote_sha 是远端对象 ID、不保证在本地对象库（force-push 独立历史场景），`git log` fatal 被 `2>/dev/null || true` 吞掉 → 扫描为空即放行。修复：推送前 `git cat-file -e "${remote_sha}^{commit}"` 验证，不存在即拒（提示先 fetch）；两处 git log 改为捕获退出码、非零 fail-closed 拦截，"扫描失败"不再被解释成"扫描无命中"。新增 force-push E2E 回归（先红后绿）。理由：与 0.7.0 修的引号 bug 同一根因类——吞错误码的闸门必然 fail-open。
+- **pre-push merge 语义修正（P1）**：v0.8.1 前半段的 `-m` 让 merge commit 对每个父各出一次 diff，会把第一父侧已接受的旧内容（如已推送的公网 IP）当新增误拦；两处扫描改 `--diff-merges=first-parent`（遍历完整历史，merge 只相对第一父出 diff）。三个场景实测：误报场景放行、冲突解决塞私钥拦、侧分支泄露拦。新增误报对照用例。
+- **diff-filter ACR → ACMRT（P1）**：C=Copied 而非 Modified——已跟踪 .env* 修改值在 ACR 下无输出可绕过路径闸门；ACMRT 补齐修改与 type-change。新增"已跟踪 .env.production 改值必拦"用例。
+- **CI 红修复（Release Blocker）**：test_pre_push.py 新用例的 `git merge --no-ff` 未注入 identity，CI 无全局 git 配置五矩阵全红（本机绿是因为本机有全局 identity）；fixture 建仓统一本地 `git config user.name/email`。
+- **静态 manifest 双拼修复（P1，前半段引入）**：ZB_SERVER_DIR=<REMOTE_DIR> 与静态站 REMOTE_DIR=/opt/<项目名>/dist 组合下，zedback 直拼出 .../dist/dist。模板改分栈指引：容器栈 ZB_SERVER_DIR=REMOTE_DIR；静态站 ZB_SERVER_DIR=REMOTE_DIR 父目录、ZB_PULLS=发布目录名。
+- **SSH_PORT 六事实（P1）**：Phase 0 采集了 SSH 端口但机器侧无消费——deploy.env 新增 `SSH_PORT`（默认 22，旧 deploy.env 兼容），两个 rsync 脚本 ssh 加 `-p`；六处"五事实"表述同步六事实；zedback 协议不动，manifest 注释标注非 22 需另行配置。理由：采集了不消费等于白问，非 22 端口部署必挂。
+- **文案陷阱与次级项**：deployment.md.tmpl 的 `cd ${REMOTE_DIR}` 在服务器无定义（deploy.env 是本地文件且 docs/private 被 rsync 排除），改为"以 deploy-rsync.sh 结尾输出的服务器命令为准"；compose 示例库文件名与 backup.sh SQLITE_DB 默认统一为 app.db；静态站纯 HTML 无构建的文案不再以 npm run build 开头；README 双语"专用账号隔离"概括、账号=项目名、.env 单数等旧口径同步。
+- **本轮未采纳项（记录备查）**：审查建议删除 pre-push/audit 的"目录名/项目名派生 /home/ 路径自动放行"——未采纳。该放行只作用于路径模式（目录名/项目名是公开可推导值），秘密内容由私钥头/值正则独立拦截；删除它会复活 0.5.10/0.5.11 实测过的"合法运维路径被拦 → --no-verify 疲劳"问题，审查方未给出攻击场景论证。
+- **已知遗留**：Prisma 7 的 prisma.config.ts 在 runner 中的模块解析（dotenv/config 引用）未经真实 Docker 运行验证，结构断言绿 ≠ 运行绿，列为后续最高优先实测项。
+
+前轮（前半段）：
 
 - **Prisma Dockerfile 修复 v0.8.0 引入的构建回归（P0）**：v0.8.0 为兼容 Prisma 7 把 `COPY prisma ./prisma` 改成 `COPY prisma* ./`——Docker COPY 语义下目录 source 拷的是内容而非目录本身，通配多 source 时 prisma/ 内容被摊平进 /app 根，/app/prisma 不存在导致 runner 的 `COPY --from=prisma-cli /app/prisma` build fail；且 prisma.config.ts 也进不了 runner。恢复目录拷贝，两个 stage 各加一行注释掉的 prisma.config.* 可选拷贝（安装时按项目实际启用），deployment-guide §7.1 同步；test_deploy.py 新增两个结构断言用例防通配回归（本机/CI 无 Docker 构建环境，以模板结构断言替代 build smoke）。理由：修兼容性不能以破坏基础构建为代价。
 - **pre-push 去掉 --first-parent（P0）**：v0.8.0 为覆盖 merge 冲突解决引入的敏感行加了 `--first-parent -m`，但 --first-parent 令 git log 完全不遍历第二父代链——feature 分支"加私钥→删除→--no-ff 合回 main"后，侧分支历史中的私钥不在扫描范围，push 放行。两处扫描均删 --first-parent 保留 -m（merge 对双父各出一次 diff，存在性检查下重复无害）。新增回归用例：侧分支泄露后删除再 merge 必须拦（先红后绿实测）。理由：推送的是整段历史，不是主线净变化。
@@ -13,7 +27,7 @@
 - **REMOTE_DIR 最后两处收口（P1）**：deployment.md.tmpl 服务器命令不再写死 `cd /opt/<项目名>`（指向 deploy.env 的 REMOTE_DIR）；backup-manifest.conf.tmpl 的 `ZB_SERVER_DIR` 改 `<REMOTE_DIR>` 占位。
 - **P2 尾巴清理**：init/adopt 工作流"闸门读 ops.md"旧口径改 deploy.env 真源表述；四处 `.env` 单数表述改 `.env*`（含两份管理规范同步）；tests 描述四处补 test_deploy.py；test_deploy.py 过期注释更新；静态站 Caddyfile 示例补 REMOTE_DIR 一致性注释。
 
-测试：86 → 92 个 unittest 用例全绿（新增 6 个）。
+测试：86 → 97 个 unittest 用例全绿。
 
 ## [0.8.0] - 2026-08-14
 

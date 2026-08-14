@@ -17,8 +17,9 @@ services:
     env_file: .env          # 敏感配置不入 git
     environment:
       # 栈相关示例：容器内一律用绝对路径（相对路径解析基准会变化）
-      # Next.js + Prisma + SQLite 示例：
-      # DATABASE_URL: "file:/app/data/<项目名>.db"
+      # Next.js + Prisma + SQLite 示例（库名与 backup.sh 的 SQLITE_DB 默认 app.db 一致；
+      # 项目实际不一致时按 DATABASE_URL 回填 backup.sh 的 SQLITE_DB）：
+      # DATABASE_URL: "file:/app/data/app.db"
       # UPLOAD_DIR: "/app/data/uploads"
     volumes:
       # 绑定挂载：备份/恢复直接在宿主机操作 ./data

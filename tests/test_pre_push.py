@@ -3,7 +3,7 @@
 """
 pre-push 隐私闸门（zedboot/assets/hooks/pre-push.tmpl）端到端行为回归测试。
 
-被测对象：自包含 bash 模板（约 138 行），安装时把顶部 PROJECT_NAME 的
+被测对象：自包含 bash 模板（约 226 行），安装时把顶部 PROJECT_NAME 的
 <项目名> 占位符替换为项目名后作为 .git/hooks/pre-push 使用（未替换自动降级
 为空）。测试在临时目录构造真实 git 仓库 + bare 远程，把替换后的模板装为
 pre-push 钩子，用真实 `git push` 端到端触发，断言退出码、拦截消息与远程引用
@@ -17,20 +17,27 @@ pre-push 钩子，用真实 `git push` 端到端触发，断言退出码、拦�
      目标远程本地无 tracking refs（真·首次推送/从未 fetch 过该远程）时排除集
      为空，自动退化为全历史扫描（fail-closed）；remote_name 为空（非 git 正常
      调用路径）时同样退化全历史扫描（空模式的 --remotes= 会排除所有远程）。
-  3. 拦截三类「新增行」（git log -p -m 排除 +++ 文件头；不用 --first-parent
-     ——侧分支历史也是推送内容必须扫描，--first-parent 只遍历第一父代会使侧
-     分支泄露在合回 main 后不可见（P0）；-m 使 merge commit 对双父各出一次
-     diff，冲突解决引入的敏感行不漏扫）：
+     已有引用（remote_sha 非零）时先 `git cat-file -e` 验证远端对象本地存在，
+     不存在（force-push 独立历史等）→ fail-closed 拦截并提示 fetch；两处 git
+     log 扫描命令退出码非零同样 fail-closed 拦截（扫描异常不放行，P0）。
+  3. 拦截三类「新增行」（git log -p --diff-merges=first-parent 排除 +++
+     文件头；不用 --first-parent（截断遍历）——侧分支历史也是推送内容必须
+     扫描，--first-parent 只遍历第一父代会使侧分支泄露在合回 main 后不可见
+     （P0）；--diff-merges=first-parent 只让 merge commit 相对第一父出一次
+     diff——冲突解决引入的敏感行不漏扫，且不会把第一父侧已接受的旧行（如已推
+     公网 IP）当新增再扫一遍（干净 merge 不误拦，P1））：
      a. 私钥格式头（BEGIN ... PRIVATE KEY）
      b. /Users/<名>/ 与 /home/<名>/ 本机绝对路径（正则要求尾部斜杠）
      c. 公网 IPv4（已排除 0./10./127./169.254./192.168./172.16-31./
         RFC 5737 文档段/受限广播）
   4. 路径级拦截：文件路径命中 .env* 变体（.env / .env.local /
      .env.production 等任意变体，含子目录内）一律拦截；.env.example /
-     .env.sample / .env.template 例外放行。git log --diff-filter=ACR 同时覆盖
-     Added 与 rename 检出（git mv .env.example .env.production 识别为 R100，
-     目标路径同样命中——--diff-filter=A 只筛 Added，rename 提交无输出漏闸，
-     P1）。在内容检查之前独立执行（内容扫描为空时路径检查仍须生效）。
+     .env.sample / .env.template 例外放行。git log --diff-filter=ACMRT 覆盖
+     Added / Copied / Modified / Renamed / type-change：git mv .env.example
+     .env.production 识别为 R100、目标路径同样命中（--diff-filter=A 只筛
+     Added，rename 提交无输出漏闸）；已跟踪 .env* 改值靠 M 命中
+     （--diff-filter=ACR 不含 M，改值提交无输出漏闸）；chmod 改权限位实测归 M。
+     在内容检查之前独立执行（内容扫描为空时路径检查仍须生效）。
   5. 放行集合（三事实分离）：/home/<仓库目录名>/、/home/<项目名>/（安装时已
      替换）、docs/private/deploy.env 的 DEPLOY_USER（机器真源，去引号去空白）
      或 docs/private/ops.md「机器可读字段」（旧项目 fallback，键后中/英文冒号
@@ -101,21 +108,27 @@ def _write(path, content):
 
 
 def git_commit(repo, message="init", add=None):
-    """显式 add + commit（-c 注入 user.name/email，不依赖全局 git 配置）。"""
+    """显式 add + commit（identity 来自 build_fixture 写入的仓库本地 config，
+    不依赖全局 git 配置——CI 无全局 identity，统一本地 config 一次到位）。"""
     if add is None:
         _git(repo, "add", "-A")
     else:
         _git(repo, "add", "--", *add)
-    _git(repo, "-c", "user.name=test", "-c", "user.email=test@example.com",
-         "commit", "-q", "-m", message)
+    _git(repo, "commit", "-q", "-m", message)
 
 
 def build_fixture(root, name=REPO_DIRNAME):
-    """临时目录内建「工作仓库 + bare 远程」并接好 origin。返回 (repo, bare)。"""
+    """临时目录内建「工作仓库 + bare 远程」并接好 origin。返回 (repo, bare)。
+    建仓时统一写本地 user.name/user.email：普通 commit、git merge（-c 注入的
+    user.name/email 对 merge 命令同样生效但此前只在 git_commit 里注入，CI 无
+    全局 identity 时直接调 git merge 报 "Committer identity unknown"——五矩阵
+    全红，根因即此）等所有 git 操作一律受益，全文件不再做逐命令 -c 注入。"""
     repo = os.path.join(root, name)
     bare = os.path.join(root, name + ".git")
     os.makedirs(repo)
     _git(repo, "init", "-q", "-b", "main")
+    _git(repo, "config", "user.name", "test")
+    _git(repo, "config", "user.email", "test@example.com")
     _git(root, "init", "-q", "--bare", bare)
     _git(repo, "remote", "add", "origin", bare)
     return repo, bare
@@ -642,6 +655,114 @@ class TestPrePushPrivacyGate(unittest.TestCase):
         self.assertIn(".env.production", p.stderr)
         self.assertIsNone(git_rev(bare, "refs/heads/main"),
                           "拦截后远程不应推进")
+
+    def test_force_push_missing_remote_obj_blocked(self):
+        """用例 17：force-push 独立历史 fail-open 回归（P0）。远端已有引用
+        （remote_sha 非零）但本地对象库无该对象（force-push 独立历史等），修复
+        前 git log "X..Y" 报 fatal、错误被 2>/dev/null 吞 → 扫描为空即放行；
+        修复后先 git cat-file -e 验证远端对象本地存在，不存在 → fail-closed
+        拦截并提示 fetch。直接以模拟 stdin（refs/heads/main <local_sha>
+        refs/heads/main <X>）执行钩子——X 在本地不存在，真实 git push 语义
+        不变但 force-push 独立历史被 git 自身拒绝前钩子已先触发（钉 fail-open
+        必须直接喂 stdin 才能走到钩子逻辑）。"""
+        # 1) 仓 A：推入干净 commit X（造"远端已接受"的引用与对象）
+        repo_a, bare_a = build_fixture(self.root, name="repoA")
+        _write(os.path.join(repo_a, "README.md"), "# A\n\nclean.\n")
+        git_commit(repo_a, message="X on A", add=["README.md"])
+        p = git_push(repo_a, "main")
+        self.assertEqual(p.returncode, 0, p.stderr)
+        sha_x = git_rev(bare_a, "refs/heads/main")
+        self.assertIsNotNone(sha_x, "前置：远端应已有 X")
+        # 2) 仓 B：本地独立历史（无 X），含私钥头
+        repo_b, _ = build_fixture(self.root, name="repoB")
+        install_hook(repo_b)
+        key_head = "-----BEGIN" + " OPENSSH PRIVATE KEY-----"
+        _write(os.path.join(repo_b, "deploy-keys.txt"), "key = %s\n" % key_head)
+        git_commit(repo_b, message="local history", add=["deploy-keys.txt"])
+        local_sha = git_rev(repo_b, "refs/heads/main")
+        # 对象存在性必须用 cat-file -e（rev-parse --verify 对 40 位完整 sha 不
+        # 校验对象库存在性，与钩子内同一检查口径）
+        px = subprocess.run(
+            ["git", "cat-file", "-e", "%s^{commit}" % sha_x], cwd=repo_b,
+            capture_output=True, text=True, timeout=60, env=_git_env())
+        self.assertNotEqual(px.returncode, 0,
+                            "前置：X 必须在仓 B 本地对象库不存在")
+        # 3) 模拟 pre-push stdin 直接执行钩子（remote 名经 $1 传入）
+        hook = os.path.join(repo_b, ".git", "hooks", "pre-push")
+        stdin_line = "refs/heads/main %s refs/heads/main %s\n" % (local_sha,
+                                                                  sha_x)
+        pr = subprocess.run([hook, "origin"], cwd=repo_b, input=stdin_line,
+                            capture_output=True, text=True, timeout=60,
+                            env=_git_env())
+        self.assertNotEqual(pr.returncode, 0,
+                            "远端对象本地不存在必须 fail-closed 拦截")
+        self.assertIn("拦截", pr.stderr)
+        self.assertIn("远端对象本地不存在", pr.stderr)
+        self.assertIn("fetch", pr.stderr)
+
+    def test_clean_merge_with_accepted_public_ip_allowed(self):
+        """用例 18：merge 误报回归（P1）。main 已有含公网 IP 8.8.8.8 的已接受
+        历史（装钩子前推 origin，模拟闸门启用前遗留值），feature 从更早的 main
+        分叉、干净；--no-ff 合回 main 后 push → 必须放行。修复前 -m 使 merge
+        commit 对第二父（feature 侧）再出一次 diff，把第一父侧已接受的 8.8.8.8
+        当新增行再扫一遍 → 干净 merge 误拦；修复后 --diff-merges=first-parent
+        只相对第一父出 diff（完整遍历下 feature 提交本身干净）→ 放行。"""
+        repo, bare = build_fixture(self.root)
+        # 1) 装钩子前：main 提交含 8.8.8.8 的历史并推 origin（已接受遗留值）
+        _write(os.path.join(repo, "README.md"), "# demo\n\nbase.\n")
+        git_commit(repo, message="base", add=["README.md"])
+        _git(repo, "checkout", "-q", "-b", "feature")
+        _write(os.path.join(repo, "feat.txt"), "feature work\n")
+        git_commit(repo, message="feature work", add=["feat.txt"])
+        _git(repo, "checkout", "-q", "main")
+        _write(os.path.join(repo, "server.txt"), "dns = 8.8.8.8\n")
+        git_commit(repo, message="accepted public ip", add=["server.txt"])
+        p = git_push(repo, "main")
+        self.assertEqual(p.returncode, 0, p.stderr)
+        # 2) 装钩子；feature 从 8.8.8.8 提交之前的历史分叉、干净
+        install_hook(repo)
+        _git(repo, "checkout", "-q", "-b", "feature2", "feature")
+        # 3) --no-ff 合回 main（无冲突，feature 提交本身干净）
+        _git(repo, "checkout", "-q", "main")
+        _git(repo, "merge", "-q", "--no-ff", "-m", "merge feature2", "feature2")
+        # 4) push → 必须放行（干净 merge 不应被已接受历史误拦）
+        p = git_push(repo, "main")
+        self.assertEqual(p.returncode, 0,
+                         "干净 merge 必须放行: %s" % p.stderr)
+        self.assertNotIn("拦截", p.stderr)
+        self.assertEqual(git_rev(bare, "refs/heads/main"),
+                         git_rev(repo, "refs/heads/main"))
+
+    def test_tracked_env_production_modified_blocked(self):
+        """用例 19：已跟踪 .env.production 改值 → 拦（P1）。路径扫描
+        --diff-filter 曾为 ACR 不含 M——已跟踪的 .env* 改值提交在 --name-only
+        下无输出漏闸放行；改为 ACMRT 后 Modified 提交输出目标路径 → 路径级检查
+        命中。初始 .env.production 在装钩子前推 origin（绕开闸门建"已接受"的
+        已跟踪文件），此后改值再推 → 必须拦截（改值内容为普通键值，不命中任何
+        内容正则，证明拦截来自路径级 M 检出而非内容）。"""
+        repo, bare = build_fixture(self.root)
+        # 1) 装钩子前：提交并 push .env.production（普通键值，内容不命中正则）
+        _write(os.path.join(repo, ".env.production"),
+               "DB_PASSWORD=supersecret123\n")
+        git_commit(repo, message="init env production",
+                   add=[".env.production"])
+        p = git_push(repo, "main")
+        self.assertEqual(p.returncode, 0, p.stderr)
+        # 2) 装钩子，已跟踪文件改值（内容仍不命中任何内容正则）
+        install_hook(repo)
+        _write(os.path.join(repo, ".env.production"),
+               "DB_PASSWORD=anothersecret456\nAPI_KEY=xyz987654321\n")
+        git_commit(repo, message="modify env production",
+                   add=[".env.production"])
+        p = git_push(repo, "main")
+        self.assertNotEqual(p.returncode, 0,
+                            "已跟踪 .env.production 改值必须被拦")
+        self.assertIn("拦截", p.stderr)
+        self.assertIn(".env.production", p.stderr)
+        # 远程应停在步骤 1 的初始提交（step-1 已推），不被推进到改值提交
+        self.assertEqual(git_rev(bare, "refs/heads/main"),
+                         git_rev(repo, "HEAD~1"),
+                         "拦截后远程不应推进到改值提交")
 
 
 if __name__ == "__main__":

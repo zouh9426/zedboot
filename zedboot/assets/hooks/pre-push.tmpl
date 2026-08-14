@@ -100,6 +100,15 @@ while read -r local_ref local_sha remote_ref remote_sha; do
       range_desc="$local_ref 全部历史（首次推送）"
     fi
   else
+    # fail-closed（P0）：remote_sha 对象本地不存在时（force-push 独立历史等，
+    # 远端对象不在本地对象库），git log "X..Y" 报 fatal 且错误被 2>/dev/null
+    # 吞掉 → 扫描为空即放行。先验证远端对象在本地存在，不存在即拦截并提示
+    # fetch（cat-file -e 是对象存在性的权威检查，rev-parse --verify 对 40 位
+    # 完整 sha 不校验对象库）。
+    if ! git cat-file -e "${remote_sha}^{commit}" 2>/dev/null; then
+      report "远端对象本地不存在（${remote_sha:0:7}），请先 git fetch ${remote_name:-远端} 后重试" "$local_ref 更新推送"
+      continue
+    fi
     range_desc="${remote_sha:0:7}..${local_sha:0:7}"
     revs=("${remote_sha}..${local_sha}")
   fi
@@ -108,14 +117,27 @@ while read -r local_ref local_sha remote_ref remote_sha; do
   # 等任意变体（含子目录内，如 config/.env.local）一律拦截，例外放行 .env.example /
   # .env.sample / .env.template。放在内容检查之前独立执行：内容扫描为空（本次推送
   # 无新增行）时路径检查仍须生效，两者任一命中即拦。
-  # --diff-filter=ACR：A 覆盖新增、C/R 覆盖修改/rename——git mv .env.example
-  #   .env.production 识别为 R100，只筛 A 时 rename 提交无输出、新路径不可见漏闸
-  #   （P1 修复）。rename 检出由 diff.renames 默认开启（无需显式 -M），ACR 下
-  #   --name-only 输出目标路径。
-  # 不用 --first-parent：侧分支历史也是推送内容必须扫描——feature 加私钥→删除→
-  #   --no-ff 合回 main 后工作树干净，--first-parent 只走主线看不到侧分支提交，
-  #   泄露放行（P0 修复）；-m 使 merge 对双父各出一次 diff，路径行重复但存在性
-  #   检查无害（下有 sort -u 去重）。
+  # --diff-filter=ACMRT：A=Added、C=Copied、M=Modified、R=Renamed、T=type-change
+  #   ——git mv .env.example .env.production 识别为 R100（只筛 A 时 rename 提交
+  #   无输出、新路径不可见漏闸）；已跟踪 .env* 改值绕过靠 M（只筛 ACR 时
+  #   Modified 提交无输出、改值放行漏闸）；chmod 改权限位实测归 M。rename 检出
+  #   由 diff.renames 默认开启（无需显式 -M）。
+  # 不用 --first-parent（截断遍历）：侧分支历史也是推送内容必须扫描——feature
+  #   加私钥→删除→--no-ff 合回 main 后工作树干净，--first-parent 只走主线看不到
+  #   侧分支提交，泄露放行（P0 修复）。--diff-merges=first-parent（git ≥2.31，
+  #   隐含 -p，与 --name-only 并存时输出仍只有路径名）只改变 merge commit 的
+  #   diff 展示（只相对第一父出一次），遍历仍是全量；-m 对双父各出一次 diff 会
+  #   在合并时把第一父侧已接受的旧路径当新增再扫一遍（无害此处，但内容级会误
+  #   拦），统一 first-parent 口径（P1 修复）。
+  # 扫描命令 fail-closed（P0）：remote_sha 本地不存在等异常时 git log 非零退出，
+  #   错误被 2>/dev/null 吞掉 → 扫描为空即放行。先捕获退出码（管道会丢 git log
+  #   的退出码，故先存变量判 $? 再管道处理），非零即拦截——正常"无新增内容"是
+  #   exit 0 空输出，不误伤。
+  env_scan="$(git log --name-only --format= --diff-merges=first-parent --diff-filter=ACMRT "${revs[@]}" 2>&1)"
+  if [ $? -ne 0 ]; then
+    report "扫描命令异常（路径级），fail-closed 拒绝推送" "$range_desc"
+    continue
+  fi
   bad_env=""
   while IFS= read -r f; do
     [ -z "$f" ] && continue
@@ -126,18 +148,30 @@ while read -r local_ref local_sha remote_ref remote_sha; do
     case "$base" in
       .env|.env.*) bad_env="$f"; break ;;
     esac
-  done < <(git log --name-only --format= -m --diff-filter=ACR "${revs[@]}" 2>/dev/null | sort -u || true)
+  done < <(printf '%s\n' "$env_scan" | sort -u)
   [ -n "$bad_env" ] && report ".env* 环境变量文件（$bad_env）" "$range_desc"
 
   # 只取新增行（排除 +++ 文件头）；git log -p 自动跳过二进制内容。
-  # -m：默认 git log -p 不显示 merge commit 的 diff——发布流程是 --no-ff 合回
-  #   main，冲突解决引入的敏感行会漏扫（P1 修复）；-m 使 merge 对双父各出一次
-  #   diff，冲突解决的新增行可见。
-  # 不用 --first-parent：侧分支历史也是推送内容必须扫描——feature 加私钥→删除→
-  #   --no-ff 合回 main 后工作树干净，--first-parent 只走主线（合并相对第一父代
-  #   的净变化为空）看不到侧分支提交，泄露放行（P0 修复）。去掉后 git log 沿全部
-  #   父代遍历，侧分支里的新增行同样被扫到。
-  added="$(git log -p -m --format= "${revs[@]}" 2>/dev/null | grep -E '^\+' | grep -vE '^\+\+\+' || true)"
+  # --diff-merges=first-parent（git ≥2.31，隐含 -p）：默认 git log -p 不显示
+  #   merge commit 的 diff——发布流程是 --no-ff 合回 main，冲突解决引入的敏感行
+  #   会漏扫（P1 修复）；first-parent 使 merge 只相对第一父（main 侧）出一次
+  #   diff，冲突解决相对 main 的新增行可见；而 -m 对第二父（feature 侧）再出一次
+  #   diff，会把第一父侧已接受的旧行（如已推公网 IP）当新增再扫一遍 → 干净
+  #   merge 误拦（P1 修复）。
+  # 不用 --first-parent（截断遍历）：侧分支历史也是推送内容必须扫描——feature
+  #   加私钥→删除→--no-ff 合回 main 后工作树干净，--first-parent 只走主线（合并
+  #   相对第一父代的净变化为空）看不到侧分支提交，泄露放行（P0 修复）。
+  #   --diff-merges=first-parent 只改 merge 的 diff 展示、不截断遍历，侧分支提交
+  #   仍逐个扫描，侧分支泄露同样拦得住。
+  # 扫描命令 fail-closed（P0）：git log 异常（如 revs 引用了本地不存在的对象）
+  #   非零退出时错误被 2>/dev/null 吞掉 → 扫描为空即放行。先捕获退出码再管道
+  #   处理（管道只取 git log 的 stdout、丢退出码），非零即拦截。
+  added="$(git log -p --diff-merges=first-parent --format= "${revs[@]}" 2>&1)"
+  if [ $? -ne 0 ]; then
+    report "扫描命令异常（内容级），fail-closed 拒绝推送" "$range_desc"
+    continue
+  fi
+  added="$(printf '%s\n' "$added" | grep -E '^\+' | grep -vE '^\+\+\+')"
   [ -z "$added" ] && continue
 
   # 1. 私钥格式头

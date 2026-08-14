@@ -699,7 +699,7 @@ def _build_deploy_checks(root, mode_info):
         "deploy:backup_manifest", "docs/private/backup-manifest.conf",
         "部署产物: 备份清单 docs/private/backup-manifest.conf（gitignore，不入库）",
         root, "deploy"))
-    # deploy.env：部署五事实（机器真源，pre-push 闸门与 audit.py 读取服务器账号），
+    # deploy.env：部署六事实（机器真源，pre-push 闸门与 audit.py 读取服务器账号），
     # 只查存在不读内容；缺失 FAIL 并指引模板 assets/project/deploy.env.tmpl
     env_actual = _find_file(root, "docs", "private", "deploy.env")
     if env_actual is not None:
@@ -707,15 +707,15 @@ def _build_deploy_checks(root, mode_info):
         if env_actual != "docs/private/deploy.env":
             detail += "（磁盘实际路径 %s）" % env_actual
         checks.append(_mk("deploy:deploy_env",
-                          "部署产物: 部署五事实 docs/private/deploy.env（gitignore，不入库）",
+                          "部署产物: 部署六事实 docs/private/deploy.env（gitignore，不入库）",
                           "PASS", detail, "deploy"))
     else:
         checks.append(_mk("deploy:deploy_env",
-                          "部署产物: 部署五事实 docs/private/deploy.env（gitignore，不入库）",
+                          "部署产物: 部署六事实 docs/private/deploy.env（gitignore，不入库）",
                           "FAIL",
                           "缺失（docs/private/deploy.env；按 assets/project/deploy.env.tmpl "
-                          "补齐部署五事实：PROJECT_NAME / DEPLOY_USER / REMOTE_DIR / "
-                          "SERVER_IP / DEPLOY_KEY）", "deploy"))
+                          "补齐部署六事实：PROJECT_NAME / DEPLOY_USER / REMOTE_DIR / "
+                          "SERVER_IP / DEPLOY_KEY / SSH_PORT）", "deploy"))
 
     if static:
         checks.append(_mk(
