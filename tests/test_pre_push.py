@@ -9,22 +9,31 @@ pre-push 隐私闸门（zedboot/assets/hooks/pre-push.tmpl）端到端行为回�
 pre-push 钩子，用真实 `git push` 端到端触发，断言退出码、拦截消息与远程引用
 推进情况——不单测钩子内部函数，全部走真实 git 语义。
 
-钉住的行为（对应 pre-push.tmpl 的实际实现，含 0.5.11 两项修正）：
+钉住的行为（对应 pre-push.tmpl 的实际实现，含 0.5.11 与隐私闸门修复）：
   1. 从 stdin 读 "local_ref local_sha remote_ref remote_sha" 行；local_sha
      全零（删除分支）跳过。
-  2. 新引用（remote_sha 全零）：本地 refs/remotes/ 非空（远程已有引用）时按
-     `git rev-list <sha> --not --remotes` 只扫增量；远程全空（真·首次推送）
-     退化为全历史扫描。
-  3. 拦截三类「新增行」（git log -p 排除 +++ 文件头）：
+  2. 新引用（remote_sha 全零）：只排除「当前目标远程」（pre-push 入参 $1）的
+     remote-tracking refs——`git rev-list <sha> --not --remotes=<remote>`。
+     目标远程本地无 tracking refs（真·首次推送/从未 fetch 过该远程）时排除集
+     为空，自动退化为全历史扫描（fail-closed）；remote_name 为空（非 git 正常
+     调用路径）时同样退化全历史扫描（空模式的 --remotes= 会排除所有远程）。
+  3. 拦截三类「新增行」（git log -p --first-parent -m 排除 +++ 文件头；
+     -m 使 merge commit 的 diff 按主线视角可见一次，冲突解决引入的敏感行不
+     漏扫）：
      a. 私钥格式头（BEGIN ... PRIVATE KEY）
      b. /Users/<名>/ 与 /home/<名>/ 本机绝对路径（正则要求尾部斜杠）
      c. 公网 IPv4（已排除 0./10./127./169.254./192.168./172.16-31./
         RFC 5737 文档段/受限广播）
-  4. 放行集合（三事实分离）：/home/<仓库目录名>/、/home/<项目名>/（安装时已
-     替换）、docs/private/ops.md「机器可读字段」登记的 /home/<服务器账号>/
-     （键后中/英文冒号均可，运行时读取，ops.md 缺失静默降级）。
-  5. <项目名> 未替换（仍含 <）→ PROJECT_NAME 降级为空，仅放行目录名派生路径。
-  6. 钩子不可执行时 git 的实测行为（git 2.50.1）：git 跳过不运行该钩子、
+  4. 路径级拦截：新增文件路径命中 .env* 变体（.env / .env.local /
+     .env.production 等任意变体，含子目录内）一律拦截；.env.example /
+     .env.sample / .env.template 例外放行。在内容检查之前独立执行（内容扫描
+     为空时路径检查仍须生效）。
+  5. 放行集合（三事实分离）：/home/<仓库目录名>/、/home/<项目名>/（安装时已
+     替换）、docs/private/deploy.env 的 DEPLOY_USER（机器真源，去引号去空白）
+     或 docs/private/ops.md「机器可读字段」（旧项目 fallback，键后中/英文冒号
+     均可）登记的 /home/<服务器账号>/，运行时读取，两者都缺失静默降级。
+  6. <项目名> 未替换（仍含 <）→ PROJECT_NAME 降级为空，仅放行目录名派生路径。
+  7. 钩子不可执行时 git 的实测行为（git 2.50.1）：git 跳过不运行该钩子、
      push 照常放行，stderr 有 advice.ignoredHook 提示（见 test_10 注释）。
      ——这正是 verify.py 把「不可执行」判 FAIL 的原因：闸门静默失效。
 
@@ -54,6 +63,8 @@ REPO_DIRNAME = "myproj"
 PROJECT_NAME = "acme-server"
 OPS_ACCOUNT = "svc_prod"       # ops.md 半角冒号登记
 OPS_ACCOUNT2 = "deploy_bot"    # ops.md 全角冒号登记（验证 ：→: 归一化）
+DEPLOY_ENV_ACCOUNT = "deploy_env_acct"  # docs/private/deploy.env 的 DEPLOY_USER（机器真源）
+OTHER_ACCOUNT = "stranger_acct"         # 未登记账号（对照拦截）
 USERS_USER = "alice"           # 本机 /Users/<虚构名>/ 测试用
 
 
@@ -131,10 +142,10 @@ def git_rev(root, rev):
     return p.stdout.strip()
 
 
-def git_push(repo, *refspec):
+def git_push(repo, *refspec, remote="origin"):
     """真实 git push 触发 pre-push 钩子；返回 CompletedProcess（非零退出不抛错，
-    拦截结果要由用例自行断言）。"""
-    return subprocess.run(["git", "push", "origin"] + list(refspec), cwd=repo,
+    拦截结果要由用例自行断言）。默认推 origin，multi-remote 用例可指定 remote。"""
+    return subprocess.run(["git", "push", remote] + list(refspec), cwd=repo,
                           capture_output=True, text=True, timeout=60,
                           env=_git_env())
 
@@ -436,6 +447,148 @@ class TestPrePushPrivacyGate(unittest.TestCase):
         self.assertEqual(git_rev(bare, "refs/heads/main"),
                          git_rev(repo, "refs/heads/main"),
                          "钩子未被运行，push 应推进远程")
+
+
+    def test_multi_remote_private_history_blocked(self):
+        """用例 11：multi-remote 漏扫回归（P0）。私有 origin 已有脏历史（装钩子前
+        推入，模拟闸门启用前的遗留值），fetch 建立 refs/remotes/origin/*；新增
+        public remote 后从脏历史处开新分支首推 public——修复前 `--not --remotes`
+        排除所有远程，会把 origin 的脏历史一并排除而漏扫放行；修复后只排除目标
+        远程（public 本地无 tracking refs → 排除集为空 → 全历史扫描）→ 必须拦截，
+        public 端引用不推进。"""
+        repo, bare_origin = build_fixture(self.root)
+        bare_public = os.path.join(self.root, "public.git")
+        _git(self.root, "init", "-q", "--bare", bare_public)
+        # 1) 装钩子前把含私钥头的脏历史推上 origin（遗留值场景）
+        key_head = "-----BEGIN" + " OPENSSH PRIVATE KEY-----"
+        _write(os.path.join(repo, "secret.txt"), "key = %s\n" % key_head)
+        git_commit(repo, message="dirty legacy", add=["secret.txt"])
+        p = git_push(repo, "main")
+        self.assertEqual(p.returncode, 0, p.stderr)
+        _git(repo, "fetch", "-q", "origin")
+        self.assertNotEqual(
+            _git(repo, "for-each-ref", "refs/remotes/origin/").stdout.strip(), "",
+            "前置：fetch 后应有 origin 的远程跟踪引用")
+        # 2) 新增 public 远程并接好
+        _git(repo, "remote", "add", "public", bare_public)
+        # 3) 装钩子，从脏历史处开新分支，首推 public（新引用场景）
+        install_hook(repo)
+        _git(repo, "checkout", "-q", "-b", "feature/x")
+        p = git_push(repo, "HEAD:refs/heads/feature/x", remote="public")
+        self.assertNotEqual(p.returncode, 0, "脏历史推 public 必须被拦")
+        self.assertIn("拦截", p.stderr)
+        self.assertIn("私钥格式头", p.stderr)
+        self.assertIsNone(git_rev(bare_public, "refs/heads/feature/x"),
+                          "拦截后 public 端不应推进")
+
+    def test_merge_conflict_resolution_blocked(self):
+        """用例 12：--no-ff 合回 main、冲突解决时新增一行私钥头（两父均无此行）
+        → push 必须拦截（P1 修复）。默认 git log -p 不显示 merge diff，冲突解决
+        引入的新增行会漏扫放行；修复后 --first-parent -m 按主线视角出一次 diff，
+        冲突解决的新增行可见。"""
+        repo, bare = build_fixture(self.root)
+        install_hook(repo)
+        # 基线提交，然后两个分支并行改同一行制造冲突
+        _write(os.path.join(repo, "conflict.txt"), "line1 = base\nline2 = common\n")
+        git_commit(repo, message="base", add=["conflict.txt"])
+        _git(repo, "checkout", "-q", "-b", "feature")
+        _write(os.path.join(repo, "conflict.txt"), "line1 = feature\nline2 = common\n")
+        git_commit(repo, message="feature change", add=["conflict.txt"])
+        _git(repo, "checkout", "-q", "main")
+        _write(os.path.join(repo, "conflict.txt"), "line1 = main\nline2 = common\n")
+        git_commit(repo, message="main change", add=["conflict.txt"])
+        # --no-ff merge 触发冲突（返回非零，属预期）
+        pm = subprocess.run(["git", "merge", "--no-ff", "feature"], cwd=repo,
+                            capture_output=True, text=True, timeout=60,
+                            env=_git_env())
+        self.assertNotEqual(pm.returncode, 0, "前置：应产生合并冲突")
+        # 冲突解决：两父均无的私钥行（两父的 line1 都不含 key 行）
+        key_head = "-----BEGIN" + " OPENSSH PRIVATE KEY-----"
+        _write(os.path.join(repo, "conflict.txt"),
+               "line1 = merged\nline2 = common\nkey = %s\n" % key_head)
+        git_commit(repo, message="merge feature with resolution",
+                   add=["conflict.txt"])
+        p = git_push(repo, "main")
+        self.assertNotEqual(p.returncode, 0, "冲突解决引入的私钥行必须被拦")
+        self.assertIn("拦截", p.stderr)
+        self.assertIn("私钥格式头", p.stderr)
+        self.assertIsNone(git_rev(bare, "refs/heads/main"),
+                          "拦截后远程不应推进")
+
+    def test_env_dot_production_blocked(self):
+        """用例 13a：新增 .env.production（内容为普通 KEY=VALUE，不命中任何内容
+        正则）→ 路径级检查拦截（P0 配套）。修复前只扫内容三类正则，.env* 一般
+        密钥值漏扫放行。"""
+        repo, bare = build_fixture(self.root)
+        install_hook(repo)
+        _write(os.path.join(repo, ".env.production"),
+               "DB_PASSWORD=supersecret123\nAPI_KEY=abc123456789\n")
+        git_commit(repo, message="add env production", add=[".env.production"])
+        p = git_push(repo, "main")
+        self.assertNotEqual(p.returncode, 0, ".env.production 必须被拦")
+        self.assertIn("拦截", p.stderr)
+        self.assertIn(".env.production", p.stderr)
+        self.assertIsNone(git_rev(bare, "refs/heads/main"),
+                          "拦截后远程不应推进")
+
+    def test_env_dot_in_subdir_blocked(self):
+        """用例 13b：子目录内的 .env 变体（config/.env.local）同样拦截。"""
+        repo, bare = build_fixture(self.root)
+        install_hook(repo)
+        _write(os.path.join(repo, "config", ".env.local"),
+               "TOKEN=localdevtoken123\n")
+        git_commit(repo, message="add env local", add=["config/.env.local"])
+        p = git_push(repo, "main")
+        self.assertNotEqual(p.returncode, 0, "子目录 .env 变体必须被拦")
+        self.assertIn("拦截", p.stderr)
+        self.assertIn(".env.local", p.stderr)
+        self.assertIsNone(git_rev(bare, "refs/heads/main"),
+                          "拦截后远程不应推进")
+
+    def test_env_example_template_allowed(self):
+        """用例 13c 对照：.env.example / .env.sample / .env.template 是模板文件
+        （无真实值），同内容 → 放行。"""
+        repo, bare = build_fixture(self.root)
+        install_hook(repo)
+        for name in (".env.example", ".env.sample", ".env.template"):
+            _write(os.path.join(repo, name), "DB_PASSWORD=supersecret123\n")
+        git_commit(repo, message="add env templates",
+                   add=[".env.example", ".env.sample", ".env.template"])
+        p = git_push(repo, "main")
+        self.assertEqual(p.returncode, 0, p.stderr)
+        self.assertNotIn("拦截", p.stderr)
+        self.assertEqual(git_rev(bare, "refs/heads/main"),
+                         git_rev(repo, "refs/heads/main"))
+
+    def test_deploy_env_account_allowed(self):
+        """用例 14：docs/private/deploy.env 的 DEPLOY_USER（机器真源）登记的服务器
+        账号 /home/<账号>/ → 放行（ops.md 未登记该账号，证明放行来自 deploy.env）；
+        对照：未登记账号路径 → 拦截。修复前只读 ops.md，deploy.env 登记的账号路径
+        会被误拦。"""
+        repo, bare = build_fixture(self.root)
+        install_hook(repo)
+        self.assertEqual(len({REPO_DIRNAME, PROJECT_NAME, DEPLOY_ENV_ACCOUNT}), 3,
+                         "前置：三事实必须互不相同")
+        # ops.md 不写服务器账号（deploy.env 为唯一来源）
+        _write(os.path.join(repo, "docs/private/deploy.env"),
+               'DEPLOY_USER="%s"\n' % DEPLOY_ENV_ACCOUNT)
+        _write(os.path.join(repo, "service.md"),
+               "unit: /home/%s/systemd/app.service\n" % DEPLOY_ENV_ACCOUNT)
+        git_commit(repo, message="service doc", add=["service.md"])
+        p = git_push(repo, "main")
+        self.assertEqual(p.returncode, 0,
+                         "deploy.env 登记的账号路径应放行: %s" % p.stderr)
+        self.assertNotIn("拦截", p.stderr)
+        self.assertEqual(git_rev(bare, "refs/heads/main"),
+                         git_rev(repo, "refs/heads/main"))
+        # 对照：未登记账号 → 拦截
+        _write(os.path.join(repo, "other.md"),
+               "unit: /home/%s/systemd/app.service\n" % OTHER_ACCOUNT)
+        git_commit(repo, message="other account", add=["other.md"])
+        p = git_push(repo, "main")
+        self.assertNotEqual(p.returncode, 0)
+        self.assertIn("本机绝对路径", p.stderr)
+        self.assertIn(OTHER_ACCOUNT, p.stderr)
 
 
 if __name__ == "__main__":

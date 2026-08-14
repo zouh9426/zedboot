@@ -151,7 +151,8 @@ TRACKED_COMMON = [
 
 def build_project(root, name="proj",
                   mode_line="项目模式：可部署",
-                  gitignore_lines=(".env", "data/", "backups/", "docs/private/"),
+                  gitignore_lines=(".env*", "!.env.example", "data/", "backups/",
+                                   "docs/private/"),
                   flavor="container",
                   dockerfile=None,
                   entrypoint_script=True,
@@ -187,6 +188,10 @@ def build_project(root, name="proj",
            "# Ops\n\nServer, users and secrets live here, never in git.\n")
     _write(os.path.join(repo, "docs/private/backup-manifest.conf"),
            "DEPLOYED=true\nSERVER=demo-host\n")
+    _write(os.path.join(repo, "docs/private/deploy.env"),
+           'PROJECT_NAME="demo"\nDEPLOY_USER="deploy-bot"\n'
+           'REMOTE_DIR="/opt/demo"\nSERVER_IP="198.51.100.10"\n'
+           'DEPLOY_KEY="~/.ssh/demo_deploy"\n')
     _write(os.path.join(repo, "archive/README.md"), "# Archive\n")
     os.makedirs(os.path.join(repo, "data"))
     os.makedirs(os.path.join(repo, "backups"))
@@ -250,8 +255,8 @@ class TestFullContainerProject(unittest.TestCase):
         self.assertEqual(p.returncode, 0)
         self.assertEqual(data["exit_code"], 0)
         self.assertEqual(data["summary"],
-                         {"PASS": 31, "FAIL": 0, "WARN": 0, "SKIP": 0,
-                          "total": 31})
+                         {"PASS": 32, "FAIL": 0, "WARN": 0, "SKIP": 0,
+                          "total": 32})
         for cid in ("placeholder", "gitignore:.env", "gitignore:data",
                     "gitignore:backups", "gitignore:docs/private",
                     "gitignore_effective",
@@ -373,7 +378,8 @@ class TestGitignoreAndTracking(unittest.TestCase):
         """用例 6a：.gitignore 缺 data/ 条目 → gitignore:data FAIL，exit 1；
         其余三项仍 PASS。"""
         repo = build_project(
-            self.root, gitignore_lines=(".env", "backups/", "docs/private/"))
+            self.root, gitignore_lines=(".env*", "!.env.example", "backups/",
+                                        "docs/private/"))
         data, p = verify_json(repo)
         self.assertEqual(p.returncode, 1)
         self.assertEqual(check_by_id(data, "gitignore:data")["status"], "FAIL")
@@ -386,7 +392,8 @@ class TestGitignoreAndTracking(unittest.TestCase):
         FAIL，exit 1；docs/private 文件未被忽略但内容干净 → 占位符/跟踪检查
         不叠加 FAIL。"""
         repo = build_project(
-            self.root, gitignore_lines=(".env", "data/", "backups/"))
+            self.root, gitignore_lines=(".env*", "!.env.example", "data/",
+                                        "backups/"))
         data, p = verify_json(repo)
         self.assertEqual(p.returncode, 1)
         self.assertEqual(check_by_id(data, "gitignore:docs/private")["status"],
@@ -421,6 +428,28 @@ class TestGitignoreAndTracking(unittest.TestCase):
         self.assertTrue(any("docs/private/ops.md" in str(x) for x in named),
                         "被跟踪文件应在检查结果中点名")
 
+    def test_gitignore_literal_env_not_enough(self):
+        """.gitignore 只写字面 .env（无 .env*）：只护住单文件，覆盖全部
+        .env* 变体不成立 → gitignore:.env FAIL，exit 1。"""
+        repo = build_project(self.root, name="literalenv",
+                             gitignore_lines=(".env", "!.env.example", "data/",
+                                              "backups/", "docs/private/"))
+        data, p = verify_json(repo)
+        self.assertEqual(p.returncode, 1)
+        self.assertEqual(check_by_id(data, "gitignore:.env")["status"], "FAIL")
+
+    def test_gitignore_env_star_covers(self):
+        """.gitignore 写 .env*：覆盖全部变体 → gitignore:.env PASS；
+        .env / .env.local / .env.production 探针全部实际被忽略 →
+        gitignore_effective PASS。"""
+        repo = build_project(self.root, name="envstar")
+        data, p = verify_json(repo)
+        self.assertEqual(p.returncode, 0)
+        self.assertEqual(data["exit_code"], 0)
+        self.assertEqual(check_by_id(data, "gitignore:.env")["status"], "PASS")
+        self.assertEqual(check_by_id(data, "gitignore_effective")["status"],
+                         "PASS")
+
 
 # ---------------------------------------------------------------------------
 # 用例 9/10：pre-push 隐私闸门
@@ -435,11 +464,12 @@ class TestGitignoreEffective(unittest.TestCase):
         self.root = self._td.name
 
     def test_env_negation_effective_fails(self):
-        """P1 回归钉：.gitignore 写 .env 又写 !.env —— 条目检查 PASS，
+        """P1 回归钉：.gitignore 写 .env* 又写 !.env —— 条目检查 PASS，
         但 git 实际不忽略 .env → gitignore_effective 必须 FAIL，exit 1。"""
         repo = build_project(self.root, name="negenv",
-                             gitignore_lines=(".env", "data/", "backups/",
-                                              "docs/private/", "!.env"))
+                             gitignore_lines=(".env*", "!.env.example", "data/",
+                                              "backups/", "docs/private/",
+                                              "!.env"))
         data, p = verify_json(repo)
         self.assertEqual(p.returncode, 1)
         self.assertEqual(check_by_id(data, "gitignore:.env")["status"], "PASS")
@@ -454,6 +484,19 @@ class TestGitignoreEffective(unittest.TestCase):
         self.assertEqual(p.returncode, 0)
         self.assertEqual(check_by_id(data, "gitignore_effective")["status"],
                          "PASS")
+
+    def test_env_variant_probe_not_ignored_fails(self):
+        """.gitignore 只有字面 .env：.env.local / .env.production 探针未被
+        忽略 → gitignore_effective FAIL 并在 detail 点名变体，exit 1。"""
+        repo = build_project(self.root, name="variantprobe",
+                             gitignore_lines=(".env", "!.env.example", "data/",
+                                              "backups/", "docs/private/"))
+        data, p = verify_json(repo)
+        self.assertEqual(p.returncode, 1)
+        eff = check_by_id(data, "gitignore_effective")
+        self.assertEqual(eff["status"], "FAIL")
+        self.assertIn(".env.local", eff["detail"])
+        self.assertIn(".env.production", eff["detail"])
 
 
 class TestPrePushHook(unittest.TestCase):
@@ -564,6 +607,27 @@ class TestDeployModes(unittest.TestCase):
         self.assertEqual(data["summary"]["FAIL"], 0)
         self.assertEqual(check_by_id(data, "project_mode")["status"], "PASS")
         self.assertEqual(check_by_id(data, "deploy:skip")["status"], "SKIP")
+
+    def test_deploy_env_missing_fails(self):
+        """部署项目缺 docs/private/deploy.env → deploy:deploy_env FAIL，
+        文案指引 assets/project/deploy.env.tmpl，exit 1。"""
+        repo = build_project(self.root, name="nodeployenv")
+        os.unlink(os.path.join(repo, "docs/private/deploy.env"))
+        data, p = verify_json(repo)
+        self.assertEqual(p.returncode, 1)
+        de = check_by_id(data, "deploy:deploy_env")
+        self.assertEqual(de["status"], "FAIL")
+        self.assertIn("deploy.env.tmpl", de["detail"])
+
+    def test_deploy_env_present_passes(self):
+        """部署项目含 docs/private/deploy.env → deploy:deploy_env PASS，
+        exit 0（只查存在，不读内容）。"""
+        repo = build_project(self.root, name="withdeployenv")
+        data, p = verify_json(repo)
+        self.assertEqual(p.returncode, 0)
+        self.assertEqual(data["exit_code"], 0)
+        self.assertEqual(check_by_id(data, "deploy:deploy_env")["status"],
+                         "PASS")
 
 
 # ---------------------------------------------------------------------------

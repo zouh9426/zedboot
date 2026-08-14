@@ -164,6 +164,41 @@ def build_bigfile(root):
     return d
 
 
+def build_env_variant_and_deploy(root):
+    """git 仓库：.env.production 被强制跟踪（真实事故形态——历史提交已入库，
+    事后补 .gitignore 也拦不住已跟踪文件）；.env.example 被 gitignore 放行
+    （!.env.example）正常跟踪，属例外名不算敏感；docs/private/ 被 gitignore
+    排除不跟踪；docs/private/deploy.env 提供服务器账号（DEPLOY_USER=），
+    ops.md 无账号字段。"""
+    repo = os.path.join(root, "envvarproj")
+    os.makedirs(repo)
+    _git(repo, "init", "-q", "-b", "main")
+    with open(os.path.join(repo, ".gitignore"), "w", encoding="utf-8") as f:
+        f.write(".env*\n!.env.example\ndocs/private/\n")
+    with open(os.path.join(repo, ".env.production"), "w", encoding="utf-8") as f:
+        f.write("DATABASE_URL=postgres://app:devpw@127.0.0.1:5432/app\n")
+    with open(os.path.join(repo, ".env.example"), "w", encoding="utf-8") as f:
+        f.write("DATABASE_URL=\n")
+    with open(os.path.join(repo, "README.md"), "w", encoding="utf-8") as f:
+        f.write("# demo\n")
+    # /home/<账号>/ 字面量会命中全局 pre-push 隐私闸门，用拼接构造，
+    # 仓库文件里不出现该字面量（与 build_privacy_leak 同口径）
+    home_path = "/home" + "/" + "deploy-bot" + "/app"
+    with open(os.path.join(repo, "notes.md"), "w", encoding="utf-8") as f:
+        f.write("server dir = %s\n" % home_path)
+    os.makedirs(os.path.join(repo, "docs/private"))
+    with open(os.path.join(repo, "docs/private/ops.md"), "w", encoding="utf-8") as f:
+        f.write("# Ops\n\nNo server account field on purpose.\n")
+    with open(os.path.join(repo, "docs/private/deploy.env"), "w",
+              encoding="utf-8") as f:
+        f.write('PROJECT_NAME="demo"\nDEPLOY_USER="deploy-bot"\n')
+    _git(repo, "add", "-A")
+    _git(repo, "add", "-f", ".env.production")
+    _git(repo, "-c", "user.name=test", "-c", "user.email=test@example.com",
+         "commit", "-q", "-m", "init")
+    return repo
+
+
 # ---------------------------------------------------------------------------
 # ① 每个 fixture 跑通不崩溃 + ② JSON 合法且关键字段存在（静态 fixture）
 # ---------------------------------------------------------------------------
@@ -439,6 +474,79 @@ class TestPrivacyLeak(unittest.TestCase):
         env_items = [it for it in self.cs["risk_items"]
                      if it["file"].startswith(".env")]
         self.assertEqual(env_items, [])
+
+
+@unittest.skipUnless(GIT_AVAILABLE, "需要 git 构建动态仓库 fixture")
+class TestEnvVariantAndDeployUser(unittest.TestCase):
+    """.env* 变体跟踪风险 + deploy.env 服务器账号真源（ops.md 无账号字段）。"""
+
+    @classmethod
+    def setUpClass(cls):
+        cls._td = tempfile.TemporaryDirectory()
+        cls.repo = build_env_variant_and_deploy(cls._td.name)
+        cls.data = audit_json(cls.repo)
+        cls.g = cls.data["sections"]["git"]
+        cls.cs = cls.data["sections"]["committed_secrets"]
+
+    @classmethod
+    def tearDownClass(cls):
+        cls._td.cleanup()
+
+    def test_tracked_env_variant_is_risk(self):
+        """被 git 跟踪的 .env.production 像被跟踪的 .env 一样报风险：
+        risk_env_variant_tracked 为真且点名变体；字面 .env 未被跟踪时
+        risk_env_tracked 仍为假。"""
+        self.assertTrue(self.g["risk_env_variant_tracked"])
+        self.assertIn(".env.production", self.g["env_variants_tracked"])
+        self.assertFalse(self.g["risk_env_tracked"])
+        self.assertFalse(self.g["env_tracked"])
+
+    def test_env_example_tracked_not_flagged(self):
+        """.env.example 是例外名（只登记键名、无敏感内容），被跟踪不报风险。"""
+        self.assertNotIn(".env.example", self.g["env_variants_tracked"])
+
+    def test_env_variant_content_not_scanned(self):
+        """.env.production 内容不进入入库内容扫描（.env* 跳过，另有专项检查）。"""
+        self.assertFalse(
+            any(it["file"].startswith(".env") for it in self.cs["risk_items"]))
+
+    def test_deploy_env_account_allowed(self):
+        """deploy.env 提供 DEPLOY_USER=deploy-bot 时 home_allow 含该账号：
+        notes.md 里的 /home/deploy-bot/ 服务器端路径不报本机路径泄露
+        （ops.md 无服务器账号字段，真源来自 deploy.env）。"""
+        self.assertFalse(
+            any(it["type"] == "local_path" for it in self.cs["risk_items"]))
+        self.assertFalse(self.cs["risk_found"])
+
+    def test_deploy_env_empty_user_falls_back_to_ops(self):
+        """deploy.env 的 DEPLOY_USER 为空 → 回退 ops.md「机器可读字段」节：
+        ops.md 登记的账号仍进 home_allow，/home/<账号>/ 服务器端路径不报。"""
+        d = os.path.join(self._td.name, "fallbackproj")
+        os.makedirs(os.path.join(d, "docs/private"))
+        with open(os.path.join(d, "docs/private/deploy.env"), "w",
+                  encoding="utf-8") as f:
+            f.write('DEPLOY_USER=""\n')
+        with open(os.path.join(d, "docs/private/ops.md"), "w",
+                  encoding="utf-8") as f:
+            f.write("# Ops\n\n- 服务器账号：legacy-acct\n")
+        with open(os.path.join(d, "notes.txt"), "w", encoding="utf-8") as f:
+            f.write("server = %s\n" % ("/home" + "/" + "legacy-acct" + "/app"))
+        cs = audit_json(d)["sections"]["committed_secrets"]
+        self.assertTrue(cs["workspace_scan"])
+        self.assertFalse(
+            any(it["type"] == "local_path" for it in cs["risk_items"]))
+        self.assertFalse(cs["risk_found"])
+
+    def test_workspace_scan_skips_env_variants(self):
+        """非 git 目录降级扫描同样跳过 .env* 变体：.env.local 含公网 IP
+        不命中（无跟踪概念，环境文件整体不入扫描）。"""
+        d = os.path.join(self._td.name, "envws")
+        os.makedirs(d)
+        with open(os.path.join(d, ".env.local"), "w", encoding="utf-8") as f:
+            f.write("PUBLIC_IP=240.0.0.1\n")
+        cs = audit_json(d)["sections"]["committed_secrets"]
+        self.assertTrue(cs["workspace_scan"])
+        self.assertFalse(cs["risk_found"])
 
 
 @unittest.skipUnless(GIT_AVAILABLE, "需要 git 构建动态仓库 fixture")

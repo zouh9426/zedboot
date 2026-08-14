@@ -10,7 +10,7 @@ Vite/Astro → `dist/`，Next.js 静态导出 → `out/`，纯 HTML → 建议 `
   本地 `docs/private/deploy.env` 提供（已 gitignore，永不入库；模板见 `assets/project/deploy.env.tmpl`）。
 - 三事实分离：本地目录名 ≠ 项目名 ≠ 服务器账号，脚本不从路径推导部署事实。
 - 发布目录由 `STATIC_OUTPUT_DIR` 控制（Vite/Astro=`dist`、Next.js 静态导出=`out`、纯 HTML=`public`）；
-  找不到发布目录即报错退出（fail-closed，**绝不发布项目根**）。
+  找不到发布目录即报错退出（fail-closed，**绝不发布项目根**；含 `STATIC_OUTPUT_DIR=.` 或越出项目的路径会被拒绝）。
 
 ## 流程
 

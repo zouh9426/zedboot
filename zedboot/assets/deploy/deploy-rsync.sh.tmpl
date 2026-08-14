@@ -24,11 +24,11 @@ fi
 : "${DEPLOY_KEY:?请在 docs/private/deploy.env 中设置 DEPLOY_KEY}"
 
 # ---- 同步代码 ----
-# 排除敏感与运行时内容：.env 只在服务器维护；data/backups 是线上数据，
+# 排除敏感与运行时内容：.env* 全家族只在服务器维护；data/backups 是线上数据，
 # 绝不可被本地覆盖，否则一次部署就会覆盖线上密钥和数据；docs/private 存部署事实，不推送
 echo "[deploy] 同步代码到 ${DEPLOY_USER}@${SERVER_IP}:${REMOTE_DIR}/"
 rsync -az --delete \
-  --exclude .git --exclude node_modules --exclude .env \
+  --exclude .git --exclude node_modules --exclude '.env*' \
   --exclude data --exclude backups \
   --exclude docs/private \
   -e "ssh -i ${DEPLOY_KEY}" \

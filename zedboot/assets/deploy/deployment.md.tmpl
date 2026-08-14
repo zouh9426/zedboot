@@ -26,11 +26,9 @@
 - **发布（一行命令链）**
 
   ```bash
-  # 本地：合回 main 后先 push 备份，再 rsync 直推
-  # <PRODUCTION_SERVER_IP> 真实值见本地 docs/private/ops.md（不入库）；部署账号 = 项目名，可推导
-  git push && rsync -az --delete --exclude .git --exclude node_modules --exclude .env \
-    --exclude data --exclude backups -e "ssh -i ~/.ssh/<DEPLOY_KEY>" \
-    ./ <项目名>@<PRODUCTION_SERVER_IP>:/opt/<项目名>/
+  # 本地：合回 main 后先 push 备份，再执行部署脚本
+  # 部署五事实由 docs/private/deploy.env 提供（脚本读取），实现以 deploy-rsync.sh 为准，本文不复制命令
+  git push && ./deploy-rsync.sh
   # 服务器：重建并自动迁移
   cd /opt/<项目名> && docker compose up -d --build
   ```

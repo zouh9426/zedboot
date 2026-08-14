@@ -19,15 +19,16 @@ KEEP_N=7                    # 滚动保留最近 N 份（默认 7，可改）
 
 # 若项目用 SQLite，确认库文件名与实际一致；无 SQLite 则留空。
 # 设计：先 sqlite3 在线备份保证一致性，再打包数据目录。
-SQLITE_DB="${DATA_DIR}/${PROJECT_NAME}.db"
+# 库文件路径显式可配：默认 data/app.db，按实际库文件名调整（与 DATABASE_URL 一致）
+SQLITE_DB="${SQLITE_DB:-${DATA_DIR}/app.db}"
 
 TIMESTAMP=$(date +%Y%m%d-%H%M%S)   # 文件名按时间序，供滚动保留排序
 
 # ---- 0. data/ 存在性守卫：无应用数据（如静态站误装本脚本）时说明并退出，不产残缺包 ----
 # 静态站无 data/，其数据备份由 zedback 经 docs/private/backup-manifest.conf 的
-# ZB_PULLS 拉取 dist/ 承担，不依赖本脚本；此处兜底让误装也无害。
+# ZB_PULLS 拉取站点产物目录（如 dist/）承担，不依赖本脚本；此处兜底让误装也无害。
 if [ ! -d "${DATA_DIR}" ]; then
-  echo "[backup] 未找到数据目录 ${DATA_DIR}，无应用数据可备份，跳过（静态站等无数据项目的备份由 zedback 经 ZB_PULLS 拉取 dist/ 承担）"
+  echo "[backup] 未找到数据目录 ${DATA_DIR}，无应用数据可备份，跳过（静态站等无数据项目的备份由 zedback 经 ZB_PULLS 拉取站点产物目录承担）"
   exit 0
 fi
 
@@ -40,6 +41,8 @@ if [ -f "${SQLITE_DB}" ]; then
     echo "[backup] 警告：SQLite 在线备份失败（库文件损坏或非 SQLite 格式），跳过一致性副本，继续打包" >&2
     rm -f -- "${BACKUP_DIR}/${PROJECT_NAME}-${TIMESTAMP}.sqlite3"   # 清掉半成品，防滚动保留漏管的孤儿文件
   fi
+else
+  echo "[backup] 未找到 SQLite 库 ${SQLITE_DB}，跳过一致性备份；如使用 SQLite 请修正 SQLITE_DB"
 fi
 
 # ---- 2. 打包数据目录 ----

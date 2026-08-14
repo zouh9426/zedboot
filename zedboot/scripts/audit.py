@@ -457,6 +457,9 @@ def detect_git(root):
         "env_tracked": None,
         "env_tracked_note": None,
         "risk_env_tracked": False,
+        "env_variants": _env_files_on_disk(root),
+        "env_variants_tracked": [],
+        "risk_env_variant_tracked": False,
         "unknown_notes": [],
     }
 
@@ -472,8 +475,10 @@ def detect_git(root):
         if data["env_exists"]:
             data["env_tracked"] = None
             data["env_tracked_note"] = note
+            data["env_variants_tracked"] = None
         else:
             data["env_tracked"] = False  # 无 .env，必然未跟踪（确定事实）
+            data["env_variants_tracked"] = None
         return data
 
     if not (ok and out.strip() == "true"):
@@ -496,6 +501,7 @@ def detect_git(root):
             if data["env_exists"]:
                 data["env_tracked"] = None
                 data["env_tracked_note"] = data["is_repo_note"]
+                data["env_variants_tracked"] = None
             else:
                 data["env_tracked"] = False
         return data
@@ -591,19 +597,25 @@ def detect_git(root):
     else:
         data["prefixed_branches_note"] = note or "git branch 命令失败，交由 AI 判断"
 
-    # .env 是否被 git 跟踪（安全风险项）
-    if data["env_exists"]:
-        ok, out, err, note = _run_git(root, ["ls-files", "--error-unmatch", "--", ".env"])
-        if ok:
-            data["env_tracked"] = True
-            data["risk_env_tracked"] = True
-        elif note is None:
-            data["env_tracked"] = False  # 存在于磁盘但未纳入索引
-        else:
-            data["env_tracked"] = None
-            data["env_tracked_note"] = note
+    # .env* 环境文件是否被 git 跟踪（安全风险项）：以 git ls-files 为真源，
+    # 覆盖 .env 与 .env.local / .env.production 等全部变体（例外名除外）。
+    # 磁盘上不存在但仍在索引/历史里的变体同样会被列出（跟踪即泄露事故）。
+    ok, out, err, note = _run_git(root, ["ls-files", "--", ".env*"])
+    if note is not None:
+        data["env_tracked"] = None
+        data["env_tracked_note"] = note
+        data["env_variants_tracked"] = None
     else:
-        data["env_tracked"] = False
+        tracked = []
+        for rel in (l.strip() for l in out.splitlines() if l.strip()):
+            name = os.path.basename(rel)
+            if _is_env_file(name) and name not in tracked:
+                tracked.append(name)
+        tracked.sort()
+        data["env_variants_tracked"] = tracked
+        data["env_tracked"] = ".env" in tracked
+        data["risk_env_tracked"] = ".env" in tracked
+        data["risk_env_variant_tracked"] = bool(tracked)
 
     return data
 
@@ -831,6 +843,30 @@ _IPV4_RE = re.compile(r"\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}(?![\d.])")
 _LOCAL_PATH_RE = re.compile(r"/(?:Users|home)/([^/\s<>\x00\[\]${}\"'`()]+)")
 _PRIVATE_KEY_RE = re.compile(r"-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----")
 
+# .env* 例外名：只登记键名的模板/示例文件，本身无敏感内容，不算环境文件
+_ENV_EXAMPLE_NAMES = frozenset({".env.example", ".env.sample", ".env.template"})
+
+
+def _is_env_file(name):
+    """.env 或 .env.<后缀> 变体（.env.local / .env.production ...）视为环境文件；
+    .env.example / .env.sample / .env.template 只登记键名、无敏感内容，不算。
+    名字取 basename 判（git ls-files 可能返回子目录路径）。"""
+    base = os.path.basename(name)
+    if base in _ENV_EXAMPLE_NAMES:
+        return False
+    return base == ".env" or base.startswith(".env.")
+
+
+def _env_files_on_disk(root):
+    """项目根磁盘上存在的 .env* 环境文件（.env 与 .env.<后缀>；例外名除外）。"""
+    entries = _list_dir(root)
+    if entries is None:
+        return []
+    return sorted(
+        e for e in entries
+        if os.path.isfile(os.path.join(root, e)) and _is_env_file(e)
+    )
+
 _PRIVACY_TYPE_LABELS = {
     "ip": "疑似公网 IPv4",
     "local_path": "本机绝对路径",
@@ -944,15 +980,34 @@ def _project_name_from_agents(root):
 _OPS_SERVER_ACCOUNT_RE = re.compile(
     r"^\s*[-*]?\s*服务器账号\s*[：:]\s*([^\s<>]+)"
 )
+# deploy.env 机器真源键：DEPLOY_USER=（去引号去空白取值）
+_DEPLOY_USER_RE = re.compile(r"^\s*DEPLOY_USER\s*=\s*(.*)$")
 
 
 def _server_accounts_from_ops(root):
-    """从项目根 docs/private/ops.md「机器可读字段」节提取「服务器账号」值。
+    """从项目根 docs/private/ 提取服务器账号（第三独立事实，见
+    references/info-collection.md 存储纪律「三事实分离」：仓库目录名 ≠
+    项目名 ≠ 服务器账号）。
 
-    服务器账号是第三个独立事实（仓库目录名 ≠ 项目名 ≠ 服务器账号，见
-    references/info-collection.md 存储纪律「三事实分离」），登记在 ops.md 一次，pre-push 闸门与 audit.py 各自读取。
-    占位符（含 < >）不入放行集合；ops.md 缺失 / 不可读 / 无该键返回空列表。
+    真源顺序：优先 docs/private/deploy.env 的 DEPLOY_USER=（机器真源，
+    pre-push 闸门同口径，值去引号去空白）；deploy.env 缺失或值为空时回退
+    ops.md「机器可读字段」节（旧项目 fallback，键后中/英文冒号均可）。
+    占位符（含 < >）不入放行集合；两处皆缺失 / 不可读 / 无该键返回空列表。
     """
+    # 机器真源：docs/private/deploy.env 的 DEPLOY_USER=
+    rel = _find_file(root, "docs", "private", "deploy.env")
+    if rel is not None:
+        text = _read_text(os.path.join(root, rel))
+        if text is not None:
+            for line in text.splitlines():
+                m = _DEPLOY_USER_RE.match(line)
+                if not m:
+                    continue
+                v = m.group(1).strip().strip('"').strip("'").strip()
+                if v and "<" not in v and ">" not in v:
+                    return [v]
+                break  # 值为空或占位符：视为未登记，回退旧源
+    # 旧项目 fallback：ops.md「机器可读字段」节
     rel = _find_file(root, "docs", "private", "ops.md")
     if rel is None:
         return []
@@ -1041,8 +1096,8 @@ def detect_committed_secrets(root):
     """检查文本文件是否含：公网 IPv4 / 本机绝对路径 / 私钥格式头。
     绝对只读：仅执行只读 git 命令与读文件内容，不修改被审计项目。
 
-    git 仓库：扫 git 跟踪的文件（跳过 .env（另有专项检查）与 .gitignore；
-    docs/private/ 下文件被跟踪本身即风险，单独列项，不扫其内容）。
+    git 仓库：扫 git 跟踪的文件（跳过 .env* 环境文件（另有专项检查）与
+    .gitignore；docs/private/ 下文件被跟踪本身即风险，单独列项，不扫其内容）。
     非 git 仓库：无入库文件概念，降级扫描工作区文本文件（跳过依赖/构建噪音目录），
     命中即未入库风险——改造前的项目恰是隐私风险期，不能静默跳过。
     被外层 git 仓库包含的嵌套目录按非仓库处理（git 命令会静默命中外层仓库，
@@ -1088,7 +1143,9 @@ def detect_committed_secrets(root):
     pn = _project_name_from_agents(root)
     if pn:
         home_allow.add(pn)
-    # 服务器账号（第三独立事实，见 info-collection.md 存储纪律三事实分离）：ops.md「机器可读字段」登记
+    # 服务器账号（第三独立事实，见 info-collection.md 存储纪律三事实分离）：
+    # deploy.env 的 DEPLOY_USER= 为机器真源（与 pre-push 闸门同口径），
+    # 缺失时回退 ops.md「机器可读字段」节（旧项目 fallback）
     for acc in _server_accounts_from_ops(root):
         home_allow.add(acc)
 
@@ -1106,8 +1163,8 @@ def detect_committed_secrets(root):
                     % len(untracked))
         for rel in files:
             base = os.path.basename(rel)
-            if base == ".env" or base == ".gitignore":
-                continue  # .env 已有专项检查；.gitignore 本就应被跟踪，不扫内容
+            if _is_env_file(base) or base == ".gitignore":
+                continue  # .env* 环境文件另有专项检查；.gitignore 本就应被跟踪，不扫内容
             if rel.lower().startswith("docs/private/"):
                 # 理论上不该被跟踪：被跟踪本身即风险项，不做内容扫描
                 data["risk_items"].append({
@@ -1131,8 +1188,8 @@ def detect_committed_secrets(root):
                 break
             dirnames[:] = [d for d in dirnames if d not in _WORKSPACE_SKIP_DIRS]
             for fn in sorted(filenames):
-                if fn in (".env", ".gitignore"):
-                    continue  # .env 不入扫描（非仓库无跟踪概念）；.gitignore 无敏感内容
+                if _is_env_file(fn) or fn == ".gitignore":
+                    continue  # .env* 不入扫描（非仓库无跟踪概念）；.gitignore 无敏感内容
                 if scanned >= _WORKSPACE_SCAN_MAX_FILES:
                     data["unknown_notes"].append(
                         "工作区文件超过 %d 个，仅扫描前 %d 个，其余未检"
@@ -1317,8 +1374,9 @@ def render_text(results, root, ts):
             names = (g["task_branches"] or []) + (g["hotfix_branches"] or [])
             L.append("- task/hotfix 前缀分支: %s"
                      % ("有: " + ", ".join(names) if names else "无"))
-        if g["risk_env_tracked"]:
-            L.append("- ⚠ .env 被 git 跟踪: 是（安全风险：敏感文件已纳入版本控制）")
+        if g["risk_env_variant_tracked"]:
+            L.append("- ⚠ .env* 环境文件被 git 跟踪: %s（安全风险：敏感文件已纳入版本控制）"
+                     % "、".join(g["env_variants_tracked"] or ["?"]))
         elif g["env_tracked"] is None:
             L.append("- .env 是否被 git 跟踪: %s" % _maybe(g, "env_tracked"))
         elif g["env_exists"]:

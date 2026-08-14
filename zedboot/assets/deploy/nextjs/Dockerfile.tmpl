@@ -39,7 +39,10 @@ COPY package.json ./
 RUN PRISMA_VERSION="$(node -p "(require('./package.json').devDependencies||{}).prisma || (require('./package.json').dependencies||{}).prisma" | tr -d '^~')" \
     && npm install --prefix /app/cli "prisma@${PRISMA_VERSION}"
 # 迁移需要 schema 与 migrations/
-COPY prisma ./prisma
+# Prisma 7 起配置移到 prisma.config.ts（.js/.mjs 亦可），必须一并进 CLI 阶段。
+# 通配 COPY prisma* ./ 同时命中 prisma/ 目录（恒存在，通配不会空匹配失败）
+# 与可能存在的 prisma.config.* 配置文件，缺一都会导致启动迁移失败。
+COPY prisma* ./
 
 # ---- 阶段 4: runner（最小生产运行时）----
 FROM node:22-alpine AS runner

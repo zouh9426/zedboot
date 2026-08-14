@@ -6,15 +6,15 @@
 
 ## 静态站点（无容器）替代说明
 
-> 若本项目为静态站（Astro / Vite / Next.js 静态导出等，构建产物为 `dist/`，见 zedboot `assets/deploy/static/README.md`），走「无容器」方案，下列 Docker 相关条目**剔除不适用**，按下表替换；其余条目照常。
+> 若本项目为静态站（Astro / Vite / Next.js 静态导出等，构建产物为发布目录：Vite/Astro=`dist`、Next.js 静态导出=`out`、纯 HTML=`public`，见 zedboot `assets/deploy/static/README.md`），走「无容器」方案，下列 Docker 相关条目**剔除不适用**，按下表替换；其余条目照常。
 
 - **A「安装 Docker；创建项目账号（docker 组、无 sudo）」** → 剔除 Docker 安装；创建项目账号（无 sudo，无需 docker 组）；服务器需已装共享 Caddy
 - **A「安装并配置反向代理：`<域名>` → `127.0.0.1:<端口>`」** → 改为配置共享 Caddy：`root * /opt/<项目名>/dist` + `file_server`（无容器端口）
-- **B「Dockerfile / docker-compose.yml / docker-entrypoint.sh」** → 剔除；替换为：本地 `npm run build`，确认构建产物 `dist/` 存在且为最新
+- **B「Dockerfile / docker-compose.yml / docker-entrypoint.sh」** → 剔除；替换为：本地 `npm run build`，确认发布目录（`STATIC_OUTPUT_DIR`，dist/out/public 按框架）存在且为最新
 - **B「备份脚本 + crontab（存 `/opt/<项目名>/backups/`）」** → 剔除 backup.sh 数据备份；静态站无应用数据，备份 = 仓库本身 + 服务器 `/opt/<项目名>/dist` 目录
-- **C「首次部署：rsync 全量代码 → `docker compose up -d --build`」** → 替换为：本地执行 `deploy-rsync-static.sh`（已带可执行位），只把 `dist/` rsync 到服务器 `/opt/<项目名>/dist`，共享 Caddy 直接伺服即生效
+- **C「首次部署：rsync 全量代码 → `docker compose up -d --build`」** → 替换为：本地执行 `deploy-rsync-static.sh`（已带可执行位），只把发布目录 rsync 到服务器 `REMOTE_DIR`（如 `/opt/<项目名>/dist`），共享 Caddy 直接伺服即生效
 - **D「发布 = rsync → `docker compose up -d --build`」** → 替换为：本地 `npm run build` → `./deploy-rsync-static.sh`
-- **D「看日志 `docker compose logs` / 重启 `docker compose restart`」** → 剔除；无容器、无应用日志、无需重启，改完 `dist/` 重新 rsync 即生效；仅改动服务器 Caddyfile 后才需 `caddy reload`
+- **D「看日志 `docker compose logs` / 重启 `docker compose restart`」** → 剔除；无容器、无应用日志、无需重启，改完发布目录重新 rsync 即生效；仅改动服务器 Caddyfile 后才需 `caddy reload`
 
 ## A. 系统层一次性操作（管理员执行）
 
@@ -37,11 +37,11 @@
 ## C. Git 与首次部署
 
 - [ ] 私有仓库（备份用）；服务器不配 deploy key、不检出 git
-- [ ] 首次部署：本地 rsync 全量代码到 `/opt/<项目名>`，在服务器配好 `.env` 后 `docker compose up -d --build`
-- [ ] 更新 `docs/private/backup-manifest.conf`：DEPLOYED=true + 填实服务器字段（zedback 每日备份据此拉取服务器数据，不改卡则服务器数据静默不进备份）
+- [ ] 首次部署：本地配好 `docs/private/deploy.env`（部署五事实）后执行 `./deploy-rsync.sh`，在服务器配好 `.env` 后 `docker compose up -d --build`
+- [ ] 更新 `docs/private/backup-manifest.conf`：ZB_DEPLOYED=true + 填实服务器字段（zedback 每日备份据此拉取服务器数据，不改卡则服务器数据静默不进备份）
 
 ## D. 日常维护（一句话）
 
-- [ ] 发布 = 本地 push（备份）→ rsync 同步到服务器 → 服务器 `docker compose up -d --build`（自动迁移）
+- [ ] 发布 = 本地 push（备份）→ `./deploy-rsync.sh`（读取 `docs/private/deploy.env` 五事实）→ 服务器 `docker compose up -d --build`（自动迁移）
 - [ ] 看日志：`docker compose logs -f <项目名>`；重启：`docker compose restart <项目名>`
 - [ ] 备份按 crontab 自动执行，建议再同步到对象存储做异地容灾

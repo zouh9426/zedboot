@@ -25,7 +25,7 @@
 4. **规范一致性**：`references/` 两份管理规范版本号必须一致，强制规则以精简版为准；`assets/` 模板改动后，检查 `SKILL.md` 的文件索引与流程描述是否仍然成立。
 5. **工作流改动要克制**：SKILL.md 的两条工作流经过多场景实测，改动需在 CHANGELOG 里写明实测依据，不凭感觉改。
 6. **收尾自检**：每次迭代收尾按项目模板同款五维自检执行（安全红线 grep / 交叉引用一致性 / 失效残留清理 / 脚本 `bash -n` 与 audit.py、verify.py 冒烟 / `python3 -m unittest discover -s tests` / CHANGELOG 同步），修复后复跑机械检查 + 纵览完整 diff；发版本前加查：README 双语同步、references 两份规范版本号一致、CI 绿。
-7. **zedback 联动纪律**：涉及开局/改造/部署流程的改动，必须保持两条契约成立——①项目路径以追加式（幂等）写进 zedback 中央登记簿 `~/Documents/Backups/projects.index`，绝不覆盖重写；②首次部署流程必须同步更新项目 `docs/private/backup-manifest.conf`（DEPLOYED=true + 服务器字段）。破坏任一契约即视为流程缺陷，需在同次改动中修复。
+7. **zedback 联动纪律**：涉及开局/改造/部署流程的改动，必须保持两条契约成立——①项目路径以追加式（幂等）写进 zedback 中央登记簿 `~/Documents/Backups/projects.index`，绝不覆盖重写；②首次部署流程必须同步更新项目 `docs/private/backup-manifest.conf`（ZB_DEPLOYED=true + 服务器字段）。破坏任一契约即视为流程缺陷，需在同次改动中修复。
 
 ## 真源纪律（维护者本机备忘）
 

@@ -25,7 +25,7 @@
 > 秘密本体（私钥内容、密码、token）**永不写入本文件与 Git**，只存在于服务器与本地。
 > 部署事实由 `docs/private/deploy.env` 提供（模板见 zedboot `assets/project/deploy.env.tmpl`）：
 > 三事实分离——本地目录名 ≠ 项目名 ≠ 服务器账号，脚本不从路径推导部署事实；
-> 发布目录由 `STATIC_OUTPUT_DIR` 控制，找不到即报错退出（fail-closed，绝不发布项目根）。
+> 发布目录由 `STATIC_OUTPUT_DIR` 控制，找不到即报错退出（fail-closed，绝不发布项目根；含 `STATIC_OUTPUT_DIR=.` 或越出项目的路径会被拒绝）。
 
 ## 2. 日常运维速查
 

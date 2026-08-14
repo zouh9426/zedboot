@@ -94,7 +94,7 @@ sudo -u <账号> cp /home/<账号>/.ssh/<项目名>_deploy.pub /home/<账号>/.s
 ```bash
 # 排除敏感与运行时内容：.env 只在服务器维护，data/backups 是线上数据，docs/private 是本地私有资料，绝不可上服务器
 rsync -az --delete \
-  --exclude .git --exclude node_modules --exclude .env \
+  --exclude .git --exclude node_modules --exclude '.env*' \
   --exclude data --exclude backups --exclude docs/private \
   -e "ssh -i ~/.ssh/<DEPLOY_KEY>" \
   ./ <DEPLOY_USER>@<PRODUCTION_SERVER_IP>:/opt/<项目名>/

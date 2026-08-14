@@ -2,6 +2,19 @@
 
 本项目所有值得记录的变更都写在这里。格式约定：每条目回答两个问题——**改了什么**、**为什么这么改（决策理由）**。
 
+## [0.8.0] - 2026-08-14
+
+外部第五轮审查驱动的隐私链路补全 + 部署契约收敛。审查的两项 P0（.env* 变体、multi-remote 漏扫）均经 /tmp 实测复现确认后修复；pre-push 所有修复均先红后绿。
+
+- **`.env*` 变体全链路保护（P0）**：此前整条链只护字面量 `.env`，`.env.local`/`.env.production` 可进 Git、镜像与服务器。①init 的 gitignore 要求改为 `.env*` + `!.env.example/.sample/.template` 例外；②verify.py 的 gitignore 检查收紧为只接受 `.env*` 覆盖，哨兵探针新增 `.env.local`/`.env.production`；③dockerignore 与两个 rsync 脚本排除同步为 `.env*`（含例外名）；④pre-push 新增路径级拦截——revs 范围内新增的 `.env*` 文件（例外名除外）直接拦，且独立于内容扫描执行（无新增行时也生效）；⑤audit.py 新增 `_is_env_file` 口径，被跟踪的 `.env*` 变体出专项风险项；⑥verify.py 降级扫描的跳过逻辑同步扩为 `.env*`（避免读到变体内容）。理由：变体文件是各框架惯例（Next/Vite 都生成 `.env.local`），字面量防护等于在惯例上开口子。
+- **pre-push multi-remote 漏扫修复（P0）**：新引用场景 `--not --remotes` 排除所有远程的 tracking refs——私有 origin 有脏历史时，新增 public remote 首推会把脏历史整体排除、未经扫描推往 public。改为用 pre-push 入参 `$1` 只排除当前目标远程（`--remotes="${remote_name}"`；目标远程本地无 refs 时排除集为空、自动退化全历史扫描，fail-closed）；另防御 `remote_name` 为空时 `--remotes=` 空模式等价排除所有远程的 fail-open 陷阱。理由：多远程是私有备份 + 公开发布的常见拓扑，排除范围必须是"目标远程"而非"所有远程"。
+- **pre-push merge commit 漏扫修复（P1）**：`git log -p` 默认不显示 merge diff，--no-ff 合回 main 时冲突解决引入的敏感行会漏扫；内容扫描与路径检查均加 `--first-parent -m`（主线视角出一次 diff，实测可命中冲突解决新增行）。新增 6 个回归用例（multi-remote 拦截、merge 藏私拦截、`.env.production`/子目录变体拦截、`.env.example` 放行对照、deploy.env 账号放行）。
+- **deploy.env 收为唯一机器真源（P1）**：pre-push 与 audit.py 的服务器账号改从 `docs/private/deploy.env` 的 `DEPLOY_USER` 读取（去引号去空白），ops.md「机器可读字段」保留为旧项目 fallback；ops.md.tmpl 与 info-collection 标注"deploy.env 机读、ops.md 人读"分工。verify.py 部署检查新增 deploy.env 存在性项（只查存在不读内容，缺失 FAIL）。理由：同一事实两个真源必然漂移；脚本没 deploy.env 跑不了而 verify 却 PASS，是验收器的直接漏项。
+- **静态站发布目录越界防护（P1）**：0.7.0 的 fail-closed 只防"目录缺失"，`STATIC_OUTPUT_DIR=.` 或 `../x` 仍可指回项目根或越出项目；新增 canonical path 校验（`cd + pwd -P` POSIX 便携写法），发布目录必须是项目真子目录。新增 `tests/test_deploy.py`（7 例：deploy.env 缺失报错、五事实注入、越界拒绝等，fake rsync 捕获实参）。
+- **backup.sh SQLite 路径不再从目录名推导（P1）**：`SQLITE_DB` 改为显式变量（默认 `${DATA_DIR}/app.db`，注释指引与 DATABASE_URL 对齐），basename 只留作备份包命名；库文件缺失从静默跳过改为输出提示。理由：服务器目录名 ≠ 数据库文件名，推导失败时一致性备份静默不执行。
+- **Prisma 7 配置兼容（P1）**：prisma-cli stage `COPY prisma ./prisma` → `COPY prisma* ./`，prisma.config.ts/js/mjs 可进 CLI stage（prisma/ 恒存在，通配不会空匹配失败）。
+- **部署契约漂移清理（P1/P2）**：容器版 deployment.md.tmpl 删除 0.5.7 时代的内联 rsync 命令块，改为 `git push && ./deploy-rsync.sh`（文档引用脚本、脚本负责实现，根除双写漂移）；go-live-checklist 容器条目同步 deploy.env 口径；裸 `DEPLOYED=true` 残留改 `ZB_DEPLOYED`；项目 AGENTS 模板自检命令改 `git ls-files -coz | xargs -0`（NUL-safe）并补 deploy.env 隐私指针；init 补 Go 主包检测指引；静态站"一律 dist"残留按框架口径清理。
+
 ## [0.7.0] - 2026-08-14
 
 外部第四轮全仓库审查驱动的**部署体系可靠性/安全性修复版**（审查范围首次覆盖部署模板、pre-push 实际 Git 语义与项目模板全文；编排核心无改动）。含一处行为反转与一处行为变更，见第 1、2 条。

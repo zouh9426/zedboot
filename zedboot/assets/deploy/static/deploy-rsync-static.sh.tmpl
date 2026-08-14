@@ -34,10 +34,20 @@ if [ ! -d "${SOURCE_DIR}" ]; then
   exit 1
 fi
 
+# 越界防护：发布目录必须是项目内的子目录（canonical path 校验，POSIX 便携，
+# 不依赖 realpath -m）。STATIC_OUTPUT_DIR=. 或 ../x 等越出项目根的路径一律拒绝，
+# 防止误把整棵项目树（含 docs/private 等）推到服务器。
+PROJECT_ABS="$(cd "${PROJECT_DIR}" && pwd -P)"
+SOURCE_ABS="$(cd "${SOURCE_DIR}" && pwd -P)"
+if [ "${SOURCE_ABS}" = "${PROJECT_ABS}" ] || [ "${SOURCE_ABS#"${PROJECT_ABS}/"}" = "${SOURCE_ABS}" ]; then
+  echo "STATIC_OUTPUT_DIR 必须指向项目内的子目录（当前解析为 ${SOURCE_ABS}）。" >&2
+  exit 1
+fi
+
 # ---- 同步网页文件（只推发布目录，排除敏感与备份）----
 echo "[deploy] 同步 ${SOURCE_DIR}/ → ${DEPLOY_USER}@${SERVER_IP}:${REMOTE_DIR}/"
 rsync -az --delete \
-  --exclude .git --exclude .env --exclude backups \
+  --exclude .git --exclude '.env*' --exclude backups \
   --exclude docs/private \
   -e "ssh -i ${DEPLOY_KEY}" \
   "${SOURCE_DIR}/" "${DEPLOY_USER}@${SERVER_IP}:${REMOTE_DIR}/"

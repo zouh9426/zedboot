@@ -11,8 +11,9 @@ zedboot 的「装后机械校验」工具，与 scripts/audit.py 的「装前只
 逐项机械核对安装承诺是否兑现：
   1. 管理文件齐备（init-workflow.md 第 1 步）
   2. 占位符替换干净（info-collection.md 存储纪律 / 填写约定）
-  3. .gitignore 含 .env / data/ / backups/ / docs/private/ 四项（条目存在 +
-     git check-ignore 生效语义双层判定）；.env 与 docs/private/ 未被 git 跟踪
+  3. .gitignore 含 .env* / data/ / backups/ / docs/private/ 四项（条目存在 +
+     git check-ignore 生效语义双层判定，.env* 覆盖全部 .env 变体）；.env 与
+     docs/private/ 未被 git 跟踪
      （init-workflow.md 第 1 步 Git 条目）
   4. pre-push 隐私闸门已安装且可执行（含 core.hooksPath 影响探测）
   5. 部署产物（仅可部署项目；init-workflow.md 第 2 步）
@@ -319,15 +320,15 @@ def _scan_committed_text(root, git_status, git_note, tracked):
                 if len(files) >= WORKSPACE_SCAN_MAX_FILES:
                     stop = True
                     break
-                if fn in (".env", ".gitignore"):
+                if _is_env_file(fn) or fn == ".gitignore":
                     continue
                 rel = fn if rel_dir == "." else os.path.join(rel_dir, fn)
                 files.append((rel.replace(os.sep, "/"), os.path.join(dirpath, fn)))
 
     for rel, path in files:
         base = os.path.basename(rel)
-        if base in (".env", ".gitignore"):
-            continue  # .env 永不入库（且内容可能含任意秘密）；.gitignore 无占位/私钥语义
+        if _is_env_file(base) or base == ".gitignore":
+            continue  # .env* 全家族永不入库（且内容可能含任意秘密）；.gitignore 无占位/私钥语义
         if _file_exceeds(path, SCAN_FILE_LIMIT):
             result["truncated"].append(rel)
         text = _read_text_head(path, SCAN_FILE_LIMIT)
@@ -396,11 +397,19 @@ def _check_placeholder(scan):
                % scan["scanned_count"], "placeholder")
 
 
+def _is_env_file(name):
+    """是否 .env* 环境文件（.env 本体与 .env.<后缀> 变体；example/sample/template 为例外名，不算敏感）。
+    与 audit.py 同名助手口径一致。"""
+    if name in (".env.example", ".env.sample", ".env.template"):
+        return False
+    return name == ".env" or name.startswith(".env.")
+
+
 def _gitignore_covers(pattern, target):
     """gitignore 行是否覆盖 target（target 如 .env / data / backups / docs/private）。
 
     语义：无斜杠的模式匹配任意层级同名项；含斜杠的模式锚定仓库根比较全路径。
-    （init-workflow.md 第 1 步要求 .gitignore 含 .env、data/、backups/、
+    （init-workflow.md 第 1 步要求 .gitignore 含 .env*、data/、backups/、
     docs/private/ 四项。）"""
     p = pattern.strip()
     if not p or p.startswith("#") or p.startswith("!"):
@@ -411,7 +420,12 @@ def _gitignore_covers(pattern, target):
     if not p:
         return False
     if target == ".env":
-        return p == ".env" or p.startswith(".env*")
+        # 收紧口径：只接受能覆盖全部 .env* 变体的模式。`/.env*`、`**/.env*`
+        # 已在上方归一化为 `.env*`（等效写法），gitignore 语义里 `.env*`
+        # 同时护住 .env / .env.local / .env.production 等全部变体；字面
+        # `.env` 只护单文件、`.env.*` 不护 .env 本体，都不再接受——防止
+        # 只写单文件而漏掉变体（init-workflow.md 第 1 步 Git 条目口径）。
+        return p == ".env*"
     if "/" in p:
         return p == target
     return p == target.rsplit("/", 1)[-1]
@@ -422,7 +436,7 @@ GITIGNORE_REQUIRED = (".env", "data", "backups", "docs/private")
 
 
 def _check_gitignore_rules(root):
-    """3a. .gitignore 含 .env / data/ / backups/ / docs/private/ 四项。"""
+    """3a. .gitignore 含 .env* / data/ / backups/ / docs/private/ 四项。"""
     gi = _find_file(root, ".gitignore")
     if gi is None:
         return [_mk("gitignore_rules", ".gitignore 必含四项", "FAIL",
@@ -435,7 +449,7 @@ def _check_gitignore_rules(root):
     lines = text.splitlines()
     checks = []
     for target in GITIGNORE_REQUIRED:
-        label = target if target == ".env" else target + "/"
+        label = ".env*" if target == ".env" else target + "/"
         if any(_gitignore_covers(line, target) for line in lines):
             checks.append(_mk("gitignore:" + target, ".gitignore 含 %s 条目" % label,
                               "PASS", "找到条目", "git_privacy"))
@@ -446,9 +460,14 @@ def _check_gitignore_rules(root):
 
 
 # 生效语义探测用的哨兵路径（check-ignore 按路径名文本匹配，不要求存在；
-# 取不可能被业务规则单独反向放行的名字）
+# 取不可能被业务规则单独反向放行的名字）。.env* 变体各探一个代表：
+# 变体是 .env* 规则要护住的第二现场，只探 .env 会漏掉 .env.local 等
+# 被单独反向放行/未覆盖的情形；.env.example 类例外名不入探针（gitignore
+# 里常写 !.env.example 放行模板，属刻意设计，不判失效——探针不探它即可）。
 _GITIGNORE_PROBES = (
     (".env", ".env"),
+    (".env.local", ".env.local"),
+    (".env.production", ".env.production"),
     ("data/", "data/.zedboot-probe"),
     ("backups/", "backups/.zedboot-probe"),
     ("docs/private/", "docs/private/.zedboot-probe"),
@@ -674,6 +693,23 @@ def _build_deploy_checks(root, mode_info):
         "deploy:backup_manifest", "docs/private/backup-manifest.conf",
         "部署产物: 备份清单 docs/private/backup-manifest.conf（gitignore，不入库）",
         root, "deploy"))
+    # deploy.env：部署五事实（机器真源，pre-push 闸门与 audit.py 读取服务器账号），
+    # 只查存在不读内容；缺失 FAIL 并指引模板 assets/project/deploy.env.tmpl
+    env_actual = _find_file(root, "docs", "private", "deploy.env")
+    if env_actual is not None:
+        detail = "存在"
+        if env_actual != "docs/private/deploy.env":
+            detail += "（磁盘实际路径 %s）" % env_actual
+        checks.append(_mk("deploy:deploy_env",
+                          "部署产物: 部署五事实 docs/private/deploy.env（gitignore，不入库）",
+                          "PASS", detail, "deploy"))
+    else:
+        checks.append(_mk("deploy:deploy_env",
+                          "部署产物: 部署五事实 docs/private/deploy.env（gitignore，不入库）",
+                          "FAIL",
+                          "缺失（docs/private/deploy.env；按 assets/project/deploy.env.tmpl "
+                          "补齐部署五事实：PROJECT_NAME / DEPLOY_USER / REMOTE_DIR / "
+                          "SERVER_IP / DEPLOY_KEY）", "deploy"))
 
     if static:
         checks.append(_mk(
