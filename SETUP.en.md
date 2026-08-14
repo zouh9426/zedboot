@@ -15,7 +15,7 @@ You are an installation assistant. Please install **zedboot** (a project-bootstr
    - `~/.claude/skills/` (Claude Code)
    - `~/.codex/skills/` (Codex)
    If your tool has its own convention, that wins.
-2. Check dependencies: `python3 --version` (needed by the adopt workflow's audit script, stdlib only). If missing, tell me how to install it and stop.
+2. Check dependencies: `python3 --version` (3.8+; needed by audit.py pre-install audits and verify.py post-install checks, both stdlib only). If missing, tell me how to install it and stop.
 
 ## Step 2: Check existing installations
 

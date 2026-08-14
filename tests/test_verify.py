@@ -250,10 +250,11 @@ class TestFullContainerProject(unittest.TestCase):
         self.assertEqual(p.returncode, 0)
         self.assertEqual(data["exit_code"], 0)
         self.assertEqual(data["summary"],
-                         {"PASS": 30, "FAIL": 0, "WARN": 0, "SKIP": 0,
-                          "total": 30})
+                         {"PASS": 31, "FAIL": 0, "WARN": 0, "SKIP": 0,
+                          "total": 31})
         for cid in ("placeholder", "gitignore:.env", "gitignore:data",
                     "gitignore:backups", "gitignore:docs/private",
+                    "gitignore_effective",
                     "env_not_tracked", "private_not_tracked", "pre_push_hook",
                     "project_mode", "deploy:compose", "deploy:dockerfile",
                     "deploy:entrypoint", "deploy:env_example", "privacy_scan"):
@@ -425,6 +426,36 @@ class TestGitignoreAndTracking(unittest.TestCase):
 # 用例 9/10：pre-push 隐私闸门
 # ---------------------------------------------------------------------------
 @unittest.skipUnless(GIT_AVAILABLE, "需要 git 构建动态仓库 fixture")
+class TestGitignoreEffective(unittest.TestCase):
+    """3b 生效语义层（git check-ignore）：条目存在但被反向规则抵消 → FAIL。"""
+
+    def setUp(self):
+        self._td = tempfile.TemporaryDirectory()
+        self.addCleanup(self._td.cleanup)
+        self.root = self._td.name
+
+    def test_env_negation_effective_fails(self):
+        """P1 回归钉：.gitignore 写 .env 又写 !.env —— 条目检查 PASS，
+        但 git 实际不忽略 .env → gitignore_effective 必须 FAIL，exit 1。"""
+        repo = build_project(self.root, name="negenv",
+                             gitignore_lines=(".env", "data/", "backups/",
+                                              "docs/private/", "!.env"))
+        data, p = verify_json(repo)
+        self.assertEqual(p.returncode, 1)
+        self.assertEqual(check_by_id(data, "gitignore:.env")["status"], "PASS")
+        eff = check_by_id(data, "gitignore_effective")
+        self.assertEqual(eff["status"], "FAIL")
+        self.assertIn(".env", eff["detail"])
+
+    def test_effective_pass_on_normal_project(self):
+        """正向对照：四项齐全且无反向规则 → gitignore_effective PASS。"""
+        repo = build_project(self.root, name="normproj")
+        data, p = verify_json(repo)
+        self.assertEqual(p.returncode, 0)
+        self.assertEqual(check_by_id(data, "gitignore_effective")["status"],
+                         "PASS")
+
+
 class TestPrePushHook(unittest.TestCase):
     """pre-push 缺失 / 不可执行 → FAIL；core.hooksPath 非空 → WARN。"""
 

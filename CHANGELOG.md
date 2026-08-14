@@ -2,6 +2,16 @@
 
 本项目所有值得记录的变更都写在这里。格式约定：每条目回答两个问题——**改了什么**、**为什么这么改（决策理由）**。
 
+## [0.6.2] - 2026-08-14
+
+外部第三轮复检驱动的校验语义补全 + 文档口径清理。
+
+- **verify.py 的 .gitignore 校验加「生效语义」第二层**：条目存在 ≠ 最终生效——`.env` 后写 `!.env` 这类反向规则会让防护静默失效（实测：该场景下 git 实际不忽略 .env，而 0.6.1 的条目检查会 PASS）。新增 `gitignore_effective` 检查：对四个哨兵路径（`.env`、`data/`、`backups/`、`docs/private/` 下探针文件）跑 `git check-ignore -q --no-index`，把顺序/取反/层级语义交还给 git 自己判；非 git 仓库 SKIP、命令异常 WARN，不臆断。test_verify.py 补两个回归钉（`!.env` 反向抵消 FAIL + 正向对照 PASS），全 PASS 用例的精确计数同步 30→31。理由：verifier 自写解析器不可能完整复刻 gitignore 语义，假 PASS 比 FAIL 更危险。
+- **compatibility 口径修正**：0.6.1 写 "Requires Python 3.8+ and Git"，与依赖自检第 3 条「Git 不可用可降级」矛盾；改为 Git 推荐（隐私闸门等 Git 功能需要），核心安装可降级。理由：9 分以后该消灭规则自相矛盾。
+- **文档残留清理**：README/SETUP 双语的 Python 前置说明从「adopt 工作流需要」改为「3.8+，audit.py 与 verify.py 均需要」（init 第 4 步收口也跑 verify）；README 仓库结构 tests 行补 verify.py。
+- **CI 新增 skill-spec 校验**：`spec-validation.yml` 用 Agent Skills 官方参考校验器 `skills-ref validate ./zedboot`（从 git 子目录安装并钉死 commit——PyPI 0.1.1 版 CLI 名有上游打包问题，上游 main 是移动目标）。本地实测当前 skill 通过校验（"Valid skill: zedboot"）。理由：防 frontmatter 回归（如 name 大写这类历史问题复发），且工具真实性已按仓库「依赖不编造」红线核实。
+- **新增 `tests/test_pre_push.py`**：pre-push 隐私闸门的行为回归（真实 git push 端到端触发，覆盖私钥头/本机路径/公网 IP 拦截、目录名/项目名/ops.md 服务器账号三类放行、私网与 RFC 5737 文档段不误伤、新 tag 增量扫描语义、`<项目名>` 未替换降级）。理由：闸门是装出去的每个项目的推送防线，此前只有手工实测无自动回归；测试补齐不碰架构，符合「停止架构迭代、真实项目喂养」的阶段定位。
+
 ## [0.6.1] - 2026-08-14
 
 外部复检驱动的 verify.py 覆盖缺口修复 + 回归测试补齐。

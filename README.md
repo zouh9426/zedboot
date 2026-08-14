@@ -34,7 +34,7 @@ adopt（旧项目改造）：只读审计 → 差距报告 → 改造方案（�
 
 ## 前置条件
 
-1. **Python 3**（审计脚本，纯标准库）——adopt 工作流需要
+1. **Python 3.8+**（audit.py 装前审计 + verify.py 装后验收，均纯标准库）——init 与 adopt 的机械校验都需要
 2. 可选：[zedui](https://github.com/zouh9426/zedui)（UI 支线；未安装时 UI 之外的功能不受影响）
 3. 可选：`gh` CLI 或 SSH key（GitHub 私有仓库创建/关联；没有则指引一次性配置或允许远程待补）
 
@@ -64,7 +64,7 @@ zedboot/                    ← skill 本体（拷进技能目录的就是它）
 │   ├── checklists/           ← 上线 Checklist、审计报告、改造方案模板
 │   └── hooks/                ← pre-push 隐私闸门模板
 └── scripts/                  ← audit.py（装前只读审计）+ verify.py（装后机械校验，均纯标准库）
-tests/                        ← audit.py fixture 测试矩阵（unittest，随 CI 运行）
+tests/                        ← audit.py + verify.py 自动化测试（unittest，随 CI 运行）
 README.md / README.en.md      ← 中英双门面
 SETUP.md / SETUP.en.md        ← 安装引导提示词（贴给你的 AI 即可）
 CHANGELOG.md                  ← 更新与决策日志

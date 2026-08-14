@@ -11,8 +11,9 @@ zedboot 的「装后机械校验」工具，与 scripts/audit.py 的「装前只
 逐项机械核对安装承诺是否兑现：
   1. 管理文件齐备（init-workflow.md 第 1 步）
   2. 占位符替换干净（info-collection.md 存储纪律 / 填写约定）
-  3. .gitignore 含 .env / data/ / backups/ / docs/private/ 四项；.env 与
-     docs/private/ 未被 git 跟踪（init-workflow.md 第 1 步 Git 条目）
+  3. .gitignore 含 .env / data/ / backups/ / docs/private/ 四项（条目存在 +
+     git check-ignore 生效语义双层判定）；.env 与 docs/private/ 未被 git 跟踪
+     （init-workflow.md 第 1 步 Git 条目）
   4. pre-push 隐私闸门已安装且可执行（含 core.hooksPath 影响探测）
   5. 部署产物（仅可部署项目；init-workflow.md 第 2 步）
   6. 入库文件私钥格式头快扫（SKILL.md 硬性规则 3 秘密边界）
@@ -444,8 +445,48 @@ def _check_gitignore_rules(root):
     return checks
 
 
+# 生效语义探测用的哨兵路径（check-ignore 按路径名文本匹配，不要求存在；
+# 取不可能被业务规则单独反向放行的名字）
+_GITIGNORE_PROBES = (
+    (".env", ".env"),
+    ("data/", "data/.zedboot-probe"),
+    ("backups/", "backups/.zedboot-probe"),
+    ("docs/private/", "docs/private/.zedboot-probe"),
+)
+
+
+def _check_gitignore_effective(root, git_status, git_note):
+    """3b. .gitignore 四项的「生效语义」（git check-ignore --no-index 判哨兵路径）。
+
+    条目存在 ≠ 最终生效——反向规则（如 `.env` 后写 `!.env`）会让防护静默失效，
+    自写解析器不可能完整复刻 gitignore 语义（顺序/取反/层级），交给 git 自己判。"""
+    if git_status != "repo":
+        return _mk("gitignore_effective", ".gitignore 四项生效语义", "SKIP",
+                   "非 git 仓库（%s），生效语义不适用" % (git_note or "git 不可用"),
+                   "git_privacy")
+    not_ignored = []
+    errors = []
+    for label, probe in _GITIGNORE_PROBES:
+        ok, out, err, note = _run_git(
+            root, ["check-ignore", "-q", "--no-index", "--", probe])
+        if note is not None or (not ok and (err or "").strip()):
+            errors.append(label)  # git 不可用 / 命令异常（exit>1）
+        elif not ok:
+            not_ignored.append(label)  # exit 1 = 实际未被忽略
+    if errors:
+        return _mk("gitignore_effective", ".gitignore 四项生效语义", "WARN",
+                   "git check-ignore 异常，无法判定：%s" % "、".join(errors),
+                   "git_privacy")
+    if not_ignored:
+        return _mk("gitignore_effective", ".gitignore 四项生效语义", "FAIL",
+                   "条目存在但未生效（存在反向规则或覆盖问题），实际未被忽略：%s"
+                   % "、".join(not_ignored), "git_privacy")
+    return _mk("gitignore_effective", ".gitignore 四项生效语义", "PASS",
+               "四项哨兵路径经 git check-ignore 确认均被实际忽略", "git_privacy")
+
+
 def _check_private_not_tracked(root, git_status, git_note):
-    """3c. docs/private/ 未被 git 跟踪（ops.md / backup-manifest.conf 含运维真实值，
+    """3d. docs/private/ 未被 git 跟踪（ops.md / backup-manifest.conf 含运维真实值，
     跟踪即泄露事故；git ls-files 判定，命令带超时）。"""
     if git_status != "repo":
         return _mk("private_not_tracked", "docs/private/ 未被 git 跟踪", "SKIP",
@@ -467,7 +508,7 @@ def _check_private_not_tracked(root, git_status, git_note):
 
 
 def _check_env_tracked(root, git_status, git_note):
-    """3b. .env 未被 git 跟踪（git ls-files 判定，命令带超时）。"""
+    """3c. .env 未被 git 跟踪（git ls-files 判定，命令带超时）。"""
     if git_status != "repo":
         return _mk("env_not_tracked", ".env 未被 git 跟踪", "SKIP",
                    "非 git 仓库（%s），无法判定跟踪状态" % (git_note or "git 不可用"),
@@ -881,6 +922,7 @@ def main(argv=None):
     checks.extend(_check_management_docs(root))
     checks.append(_check_placeholder(scan))
     checks.extend(_check_gitignore_rules(root))
+    checks.append(_check_gitignore_effective(root, git_status, git_note))
     checks.append(_check_env_tracked(root, git_status, git_note))
     checks.append(_check_private_not_tracked(root, git_status, git_note))
     checks.append(_check_pre_push_hook(root, git_status, git_note))

@@ -36,7 +36,7 @@ adopt (retrofit):    read-only audit → gap report → adoption plan (your call
 
 ## Requirements
 
-1. **Python 3** (the audit script, stdlib only) — needed by the adopt workflow
+1. **Python 3.8+** (audit.py pre-install audits + verify.py post-install checks, both stdlib only) — needed by the mechanical checks in both workflows
 2. Optional: [zedui](https://github.com/zouh9426/zedui) (UI track; everything else works without it)
 3. Optional: `gh` CLI or an SSH key (for creating/linking the private GitHub repo; otherwise you get one-time setup guidance or may defer)
 
@@ -66,7 +66,7 @@ zedboot/                    ← the skill itself (this is what you copy)
 │   ├── checklists/           ← go-live checklist, audit report, adoption plan templates
 │   └── hooks/                ← pre-push privacy gate template
 └── scripts/                  ← audit.py (pre-install read-only audit) + verify.py (post-install mechanical checks, both stdlib-only)
-tests/                        ← audit.py fixture test matrix (unittest, runs in CI)
+tests/                        ← audit.py + verify.py automated tests (unittest, runs in CI)
 README.md / README.en.md      ← Chinese/English front doors
 SETUP.md / SETUP.en.md        ← guided-install prompts (paste to your AI)
 CHANGELOG.md                  ← changes with decision rationale

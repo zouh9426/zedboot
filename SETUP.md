@@ -15,7 +15,7 @@
    - `~/.claude/skills/`（Claude Code）
    - `~/.codex/skills/`（Codex）
    如果你的工具另有约定的技能目录，以你的约定为准。
-2. 检查依赖工具：`python3 --version`（adopt 工作流的审计脚本需要，纯标准库）。缺就先告诉我安装方法并停下。
+2. 检查依赖工具：`python3 --version`（3.8+；audit.py 装前审计与 verify.py 装后验收都需要，纯标准库）。缺就先告诉我安装方法并停下。
 
 ## 第 2 步：检查已有安装
 
