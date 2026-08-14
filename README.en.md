@@ -66,7 +66,7 @@ zedboot/                    ← the skill itself (this is what you copy)
 │   ├── checklists/           ← go-live checklist, audit report, adoption plan templates
 │   └── hooks/                ← pre-push privacy gate template
 └── scripts/                  ← audit.py (pre-install read-only audit) + verify.py (post-install mechanical checks, both stdlib-only)
-tests/                        ← audit.py + verify.py automated tests (unittest, runs in CI)
+tests/                        ← audit.py + verify.py + pre-push hook tests (unittest, runs in CI)
 README.md / README.en.md      ← Chinese/English front doors
 SETUP.md / SETUP.en.md        ← guided-install prompts (paste to your AI)
 CHANGELOG.md                  ← changes with decision rationale

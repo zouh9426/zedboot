@@ -26,6 +26,7 @@
   - 脚本落盘后统一 `chmod +x`（执行位兜底，防模板来源或拷贝方式丢位）：`docker-entrypoint.sh`（nextjs/python 栈；go 栈无此文件，跳过）、`backup.sh`、`deploy-rsync.sh`（静态站点为 `deploy-rsync-static.sh`）。
 - 生成 `docs/guides/deployment.md`（容器栈用 `assets/deploy/deployment.md.tmpl`，静态站点用 `assets/deploy/deployment-static.md.tmpl`；入库文件只写占位符，真实运维值按下条入 ops.md）。
 - 生成 `docs/private/ops.md`（用 `assets/project/ops.md.tmpl`，填入 Phase 0 采集的真实运维值；其中「机器可读字段」节的「服务器账号」行是 pre-push 闸门与 audit.py 运行时放行的依据，见 `info-collection.md` 存储纪律三事实分离），并提醒用户：ops.md 不进 Git、无版本备份，需配独立私有备份通道（如私有 ops-notes 仓库）。
+- 生成 `docs/private/deploy.env`（模板 `assets/project/deploy.env.tmpl`：部署五事实 `PROJECT_NAME`/`DEPLOY_USER`/`REMOTE_DIR`/`SERVER_IP`/`DEPLOY_KEY` 由该文件显式提供，脚本不从本地路径推导——三事实分离的落地载体；同属 `.gitignore` 排除，私有不入库）。
 - 生成 `docs/private/backup-manifest.conf`（模板 `assets/project/backup-manifest.conf.tmpl`）：zedback 每日备份按它拉取服务器数据，字段含义见模板注释；无部署项目不生成；**首次部署完成后必须更新该清单**：`ZB_DEPLOYED` 翻为 true 并填实 `ZB_SSH_TARGET`/`ZB_SSH_KEY`/`ZB_SERVER_DIR`/`ZB_PULLS`（键名以模板注释为准，一律 ZB_ 前缀；部署动作与改卡是同一流程的一部分）。
 - 上线 Checklist（`assets/checklists/go-live-checklist.md`）登记为 TODO 任务；静态站点先按文件内「静态站点（无容器）替代说明」区块裁剪再登记，剔除永远完不成的 Docker 条目。
 - `.env.example` 只写键名入库；`.env` 永不入库（`.gitignore` 纪律见第 1 步的 Git 条目）。
@@ -38,7 +39,7 @@
 
 ## 4. 收口闭环
 
-- 跑 `scripts/verify.py <项目路径>` 做装后机械校验（文件齐备、占位符替换干净、`.env` 未跟踪、闸门就位等），FAIL 项修复后再往下走。
+- 跑 `python3 <skill路径>/scripts/verify.py <项目路径>` 做装后机械校验（文件齐备、占位符替换干净、`.env` 未跟踪、闸门就位等），FAIL 项修复后再往下走。
 - 登记进 zedback 中央登记簿：把项目绝对路径追加一行到 `~/Documents/Backups/projects.index`（文件不存在则创建；路径已在簿中则跳过，幂等；**追加，绝不覆盖重写**）。无 zedback 环境（该文件体系不存在且用户未使用 zedback）时跳过此步。
 - 三体系交界面只有三个文件，逐一核对：`AGENTS.md`（引用 PROJECT_RULES、DESIGN.md、deployment.md）、`PROJECT_INDEX.md`（外部资源表填好：GitHub 仓库/服务器/域名/端口/备份）、`TODO.md`（初始任务建好）。
 - 向用户输出**项目识别摘要**（管理规范 §7.1 的第一次实践），请用户确认。

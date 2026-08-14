@@ -9,6 +9,6 @@ set -e
 # 容器启动入口：先确保数据目录存在、执行数据库迁移，再启动服务
 mkdir -p /app/data/uploads
 echo "[entrypoint] 执行数据库迁移…"
-node /app/cli/node_modules/prisma/build/index.js migrate deploy   # 栈相关：换成你的迁移命令
+/app/cli/node_modules/.bin/prisma migrate deploy   # 栈相关：换成你的迁移命令
 echo "[entrypoint] 启动服务…"
 exec node server.js

@@ -64,7 +64,7 @@ zedboot/                    ← skill 本体（拷进技能目录的就是它）
 │   ├── checklists/           ← 上线 Checklist、审计报告、改造方案模板
 │   └── hooks/                ← pre-push 隐私闸门模板
 └── scripts/                  ← audit.py（装前只读审计）+ verify.py（装后机械校验，均纯标准库）
-tests/                        ← audit.py + verify.py 自动化测试（unittest，随 CI 运行）
+tests/                        ← audit.py + verify.py + pre-push hook 自动化测试（unittest，随 CI 运行）
 README.md / README.en.md      ← 中英双门面
 SETUP.md / SETUP.en.md        ← 安装引导提示词（贴给你的 AI 即可）
 CHANGELOG.md                  ← 更新与决策日志

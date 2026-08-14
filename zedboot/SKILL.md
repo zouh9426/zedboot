@@ -13,7 +13,7 @@ compatibility: Requires Python 3.8+ (audit/verify scripts). Git is recommended a
 | 体系 | 内容 | 安装产物 | 适用范围 |
 |---|---|---|---|
 | 项目管理 | AI-Ready 项目管理规范 v1.4 | `docs/project/` 五件套 + 入口文件 + `archive/` | 所有项目 |
-| 部署 | 专用账号隔离 + Docker + Git/rsync 工作流 | Dockerfile 等 + `docs/guides/deployment.md` | 仅"可部署代码项目"（含混合项目的代码部分） |
+| 部署 | 专用账号 + Docker（权限分档，见 §2 安全档位）+ Git/rsync 工作流 | Dockerfile 等 + `docs/guides/deployment.md` | 仅"可部署代码项目"（含混合项目的代码部分） |
 | UI | zedui 编排工作流 | `DESIGN.md`（由 zedui 生成） | 仅项目有界面时 |
 
 本文件是**控制器**：模式判断、依赖自检、硬性规则在此；Phase 0 采集明细与两条工作流的逐步细则按需加载 `references/` 下对应文件（执行到哪步读哪份）。
@@ -42,7 +42,7 @@ compatibility: Requires Python 3.8+ (audit/verify scripts). Git is recommended a
 本 Skill 只跑一次，开局一次性把信息要齐：**A 项目身份 / B Git·GitHub / C 服务器 / D 域名 / E 应用密钥 / F 备份策略**六组；B~F 任何一组都可答"待定"（自动生成 TODO，不阻塞流程）。三条红线先记住：
 
 - **密钥采集只问键名不问值**——绝不让用户把 key 值贴进对话；秘密本体不进聊天上下文、永不入库，值由用户自行落盘 `.env`。
-- 运维真实值（IP / SSH 端口 / 密钥真实路径 / crontab 调度）只存本地 `docs/private/ops.md`（gitignore），入库文件一律写占位符。
+- 运维真实值（IP / SSH 端口 / 密钥真实路径 / crontab 调度）只存本地 `docs/private/ops.md`（gitignore），入库文件一律写占位符；部署脚本消费的五事实另存 `docs/private/deploy.env`（同为 gitignore，永不入库）。
 - 可推导值（账号 = 项目名、`/opt/<项目名>` 目录）可直接入库。
 
 → 六组采集项明细、"待定"机制、存储纪律、三事实分离、转 Public 前置：**执行 Phase 0 前必读 `references/info-collection.md`**。
@@ -92,7 +92,7 @@ D. 对齐收尾：verify.py 校验 → 决议 + 状态回填 + 三体系交界�
 | 强制规则（复制进项目） | `references/project-rules-compact.md` |
 | 完整参考版（按需查） | `references/project-rules-reference.md` |
 | 部署规范正文 | `references/deployment-guide.md` |
-| 项目文件模板 | `assets/project/`（AGENTS/README/CHANGELOG/五件套/archive/ops.md.tmpl——ops.md 落到项目 `docs/private/`） |
+| 项目文件模板 | `assets/project/`（AGENTS/README/CHANGELOG/五件套/archive/ops.md.tmpl/deploy.env.tmpl——ops.md 与 deploy.env 落到项目 `docs/private/`） |
 | 备份清单模板（zedback 联动） | `assets/project/backup-manifest.conf.tmpl`（落到项目 `docs/private/`，zedback 每日备份消费） |
 | 部署模板（四栈 + 通用件） | `assets/deploy/`（nextjs/python/go/static 四个栈目录，entrypoint 在 nextjs/python 栈目录内（go 栈 ENTRYPOINT 烤进镜像、无独立 entrypoint）；compose/backup/rsync/dockerignore/deployment.md.tmpl（含静态站变体 deployment-static.md.tmpl）在目录根部） |
 | Checklist 与报告模板 | `assets/checklists/`（go-live / audit-report / adoption-plan） |

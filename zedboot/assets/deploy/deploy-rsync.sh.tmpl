@@ -3,39 +3,36 @@ set -euo pipefail
 
 # ============================================================
 # 部署脚本（本地执行，zedboot skill 模板）
-# 把项目代码从本地 rsync 直推到服务器 /opt/<项目名> 重建
+# 把项目代码从本地 rsync 直推服务器远程目录（REMOTE_DIR）重建
 # 落地：复制到本地项目根目录为 deploy-rsync.sh
-# 隐私线：本脚本入库，只保留占位符；真实值（IP/账号/密钥路径）统一存本地
-#   docs/private/ops.md（已 gitignore，永不入库），部署时经环境变量传入：
-#     PRODUCTION_SERVER_IP=… ./deploy-rsync.sh
-#   （可把 export 行写进 docs/private/ 下的私有文件后 source）
+# 隐私线：本脚本入库，只保留占位符；部署五事实（项目名/账号/目录/IP/密钥）
+#   统一存本地 docs/private/deploy.env（已 gitignore，永不入库），本脚本自动 source
 # 对应 references/deployment-guide.md §4
 # ============================================================
 
-# ---- 路径自推导（脚本落盘在项目根目录；本地目录名 = 项目名 = 服务器 /opt/ 目录名）----
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_NAME="$(basename "${PROJECT_DIR}")"
 
-# ---- 变量区（默认值均为可推导约定；隔离真实值经环境变量传入，见 docs/private/ops.md）----
-DEPLOY_USER="${DEPLOY_USER:-${PROJECT_NAME}}"                 # 默认约定：账号 = 项目名
-SERVER_IP="${PRODUCTION_SERVER_IP:-<PRODUCTION_SERVER_IP>}"   # 真实值见 docs/private/ops.md，不入库
-SSH_KEY="${DEPLOY_KEY:-~/.ssh/${PROJECT_NAME}_deploy}"        # 默认约定；偏离时经 DEPLOY_KEY 传入
-REMOTE_DIR="/opt/${PROJECT_NAME}"
-
-if [[ "${SERVER_IP}" == "<PRODUCTION_SERVER_IP>" ]]; then
-  echo "[deploy] 未提供服务器 IP。真实值见 docs/private/ops.md，用法：PRODUCTION_SERVER_IP=… $0" >&2
-  exit 1
+# 部署事实来自 docs/private/deploy.env（三事实分离，不从路径推导）
+if [ -f "${PROJECT_DIR}/docs/private/deploy.env" ]; then
+  # shellcheck disable=SC1091
+  . "${PROJECT_DIR}/docs/private/deploy.env"
 fi
+: "${PROJECT_NAME:?请在 docs/private/deploy.env 中设置 PROJECT_NAME}"
+: "${DEPLOY_USER:?请在 docs/private/deploy.env 中设置 DEPLOY_USER}"
+: "${REMOTE_DIR:?请在 docs/private/deploy.env 中设置 REMOTE_DIR}"
+: "${SERVER_IP:?请在 docs/private/deploy.env 中设置 SERVER_IP}"
+: "${DEPLOY_KEY:?请在 docs/private/deploy.env 中设置 DEPLOY_KEY}"
 
 # ---- 同步代码 ----
 # 排除敏感与运行时内容：.env 只在服务器维护；data/backups 是线上数据，
-# 绝不可被本地覆盖，否则一次部署就会覆盖线上密钥和数据
+# 绝不可被本地覆盖，否则一次部署就会覆盖线上密钥和数据；docs/private 存部署事实，不推送
 echo "[deploy] 同步代码到 ${DEPLOY_USER}@${SERVER_IP}:${REMOTE_DIR}/"
 rsync -az --delete \
   --exclude .git --exclude node_modules --exclude .env \
   --exclude data --exclude backups \
-  -e "ssh -i ${SSH_KEY}" \
+  --exclude docs/private \
+  -e "ssh -i ${DEPLOY_KEY}" \
   "${PROJECT_DIR}/" "${DEPLOY_USER}@${SERVER_IP}:${REMOTE_DIR}/"
 
 echo "[deploy] 代码已同步。请在服务器执行："
-echo "  cd /opt/${PROJECT_NAME} && docker compose up -d --build   # 启动时自动迁移"
+echo "  cd ${REMOTE_DIR} && docker compose up -d --build   # 启动时自动迁移"

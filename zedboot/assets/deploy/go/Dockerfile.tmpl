@@ -20,7 +20,9 @@ COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
 # 静态编译：CGO_ENABLED=0，纯静态二进制，可跑在最小镜像上
-RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/<项目名> ./...
+# 主包路径默认 ./cmd/server；单 main package 项目可用 --build-arg GO_MAIN_PACKAGE=. 覆盖
+ARG GO_MAIN_PACKAGE=./cmd/server
+RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/<项目名> "${GO_MAIN_PACKAGE}"
 
 # ---- 阶段 2: runner（最小运行时）----
 # 二选一：

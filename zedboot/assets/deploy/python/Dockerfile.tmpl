@@ -29,10 +29,10 @@ COPY . .
 
 # 非 root 运行
 RUN useradd -m appuser && mkdir -p /app/data && chown -R appuser:appuser /app
-USER appuser
 
-COPY docker-entrypoint.sh /app/docker-entrypoint.sh
-RUN chmod +x /app/docker-entrypoint.sh
+# COPY 带 --chown/--chmod 一步到位（此时仍以 root 执行）；切到 appuser 后再 chmod 会因无权限失败
+COPY --chown=appuser:appuser --chmod=755 docker-entrypoint.sh /app/docker-entrypoint.sh
+USER appuser
 
 # 数据卷：数据库与上传文件持久化（compose 绑定挂载 ./data:/app/data）
 VOLUME /app/data

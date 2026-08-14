@@ -1,25 +1,35 @@
 # 项目部署体系规范
 
 > 本文件为 zedboot skill 的参考规范；项目落地时由 AI 据此生成项目内 `docs/guides/deployment.md`（入库文件只写占位符，真实运维值存本地 `docs/private/ops.md`，见 §6）。
-> 适用范围：单台云服务器上共机运行多个小型项目的部署规范。三层结构：**专用账号隔离 + Docker 容器化 + Git 工作流**。
+> 适用范围：单台云服务器上共机运行多个小型项目的部署规范。三层结构：**专用账号 + Docker 容器化 + Git 工作流**（账号的 Docker 权限按 §2 安全档位配置）。
 > 文中 `<项目名>`、`<域名>`、`<端口>`、`<账号>` 为可推导/业务占位符，落地时直接填实入库；`<PRODUCTION_SERVER_IP>`、`<DEPLOY_KEY>` 等英文大写占位符为隔离运维值，真实值写入 `docs/private/ops.md` 而非入库文档。
 
 ## 1. 体系概览
 
-1. **专用账号隔离**：每项目一个系统账号（docker 组、无 sudo）+ `/opt/<项目名>`，多项目共机互不越权，单个项目的最大破坏范围就是它自己的目录。
+1. **专用账号 + 分档 Docker 权限**：每项目一个系统账号（无 sudo）+ `/opt/<项目名>`，账号负责文件归属、SSH 部署通道与备份任务；Docker 操作权限按 §2 的安全档位配置。注意：默认 standard 档下账号入 docker 组，而 **docker 组等价 root 级权限**，此时账号隔离只在文件/SSH 归属层面成立，不构成宿主机安全边界（见 §2）。
 2. **Docker 容器化**：多阶段构建产出最小运行时镜像，compose 一键起停；容器启动时自动执行数据库迁移；数据绑定挂载到宿主机，容器与镜像随时可丢弃；反向代理（Caddy）对外提供 HTTPS。
 3. **Git 工作流 + 本地直推部署**：每项目一个独立私有 GitHub 仓库仅作备份与版本管理；部署时用 rsync 把代码从本地直接推到服务器重建，GitHub 与服务器之间不发生关系，两边都以本地为源头。纪律：**先入库备份、再部署**（push 只与发布绑定，详见 §4），GitHub 和服务器内容就永远一致。任务分支开发 → 合回主干 → 发布打标签，全程可追溯。
 
 **适用前提**：单台云服务器（1C1G 即可跑小型项目）跑多个项目；面向大陆访客优先选香港/新加坡 VPS（免备案，建议优化线路），大陆 VPS 必须 ICP 备案，且备案通过前 80/443 通常被服务商拦截。
 
-## 2. 专用账号约定
+## 2. 专用账号约定与安全档位
 
 **约定**：
 
-- 每项目一个专用系统账号：docker 组成员、**无 sudo**
+- 每项目一个专用系统账号：**无 sudo**；是否加入 docker 组取决于下方安全档位
 - 应用目录 `/opt/<项目名>`（本地 rsync 的部署目标；服务器上不检出 git、不手工改代码）；数据 `/opt/<项目名>/data`
 - SSH 部署密钥仅授权该项目账号，**不放 root**（私钥拷回本地，用于 SSH/rsync 部署登录）
 - 备份脚本与 crontab 归属项目账号，备份存 `/opt/<项目名>/backups/`
+
+**安全档位**（按威胁模型选择，可随时升档）：
+
+| 档位 | 机制 | 隔离强度 | 适用场景 |
+|---|---|---|---|
+| **standard**（默认） | 项目账号入 docker 组，自行执行 `docker compose` | **仅文件/SSH 归属隔离**：docker 组 = root 级权限，账号可经 docker socket 提权控制整台宿主机，不构成安全边界 | 单管理员、全部项目代码可信、共机项目均为己有 |
+| **hardened** | 项目账号退出 docker 组；部署由 root 拥有的固定 wrapper（如 `zed-deploy <项目名>`）执行 root 拥有的 compose（`/etc/zedboot/projects/<项目名>/compose.yaml`，写死挂载与端口，禁 privileged / 任意 bind mount / host network）；可选配 SSH forced-command 控制 key | 项目账号无法直接接触 Docker，破坏范围锁死在自己目录 | 服务器上运行不可信代码、多管理员、AI agent 直接在服务器执行任务 |
+| **isolated** | 每项目独立 Rootless Docker daemon（systemd user service 管理） | daemon 与容器均运行在非 root user namespace，Docker 层完全隔离 | 强隔离需求；可接受多 daemon 开销与 Rootless 的功能限制 |
+
+> **standard 档必须诚实认知**：专用账号的价值是文件归属、SSH 通道与职责清晰，**不是安全隔离**——Docker 官方文档明确 docker 组成员获得 root 级权限（<https://docs.docker.com/engine/install/linux-postinstall/>）。威胁模型中出现"项目账号会被不可信方使用"（如 AI agent 直接在服务器上以项目账号执行任务）时应升 hardened。hardened 的 wrapper 必须与 root-owned compose 配套：compose 若仍可被项目账号修改（挂载 `/`、`privileged: true`），wrapper 形同虚设。Rootless 模式见 <https://docs.docker.com/engine/security/rootless/>。
 
 **职责分层**：
 
@@ -33,7 +43,7 @@
 
 ```bash
 # 系统层一次性操作（管理员执行）
-sudo useradd -m -s /bin/bash -G docker <账号>        # docker 组、无 sudo
+sudo useradd -m -s /bin/bash -G docker <账号>        # standard 档：docker 组、无 sudo（hardened/isolated 档去掉 -G docker）
 sudo mkdir -p /opt/<项目名> && sudo chown <账号>:<账号> /opt/<项目名>
 sudo -u <账号> mkdir -p /home/<账号>/.ssh /opt/<项目名>/backups
 
@@ -82,15 +92,15 @@ sudo -u <账号> cp /home/<账号>/.ssh/<项目名>_deploy.pub /home/<账号>/.s
 **rsync 部署命令**（本地执行，推送到项目账号）：
 
 ```bash
-# 排除敏感与运行时内容：.env 只在服务器维护，data/backups 是线上数据，绝不可被本地覆盖
+# 排除敏感与运行时内容：.env 只在服务器维护，data/backups 是线上数据，docs/private 是本地私有资料，绝不可上服务器
 rsync -az --delete \
   --exclude .git --exclude node_modules --exclude .env \
-  --exclude data --exclude backups \
+  --exclude data --exclude backups --exclude docs/private \
   -e "ssh -i ~/.ssh/<DEPLOY_KEY>" \
   ./ <DEPLOY_USER>@<PRODUCTION_SERVER_IP>:/opt/<项目名>/
 ```
 
-> 要点：`--delete` 保证服务器目录与本地精确一致；排除项必须包含 `.env`、`data/`、`backups/`，否则一次部署就会覆盖线上密钥和数据。
+> 要点：`--delete` 保证服务器目录与本地精确一致；排除项必须包含 `.env`、`data/`、`backups/`、`docs/private/`，否则一次部署就会覆盖线上密钥和数据、或把本地私有运维资料同步上服务器。
 
 ## 5. 新项目上线 Checklist
 
@@ -101,7 +111,7 @@ rsync -az --delete \
 - [ ] 开通云服务器（免备案地区 / 大陆需 ICP 备案）
 - [ ] DNS：添加 A 记录，`<域名>` → 服务器 IP
 - [ ] 云控制台防火墙放行 80/443（部分厂商默认只放行 80，**443 要手动加**）
-- [ ] 安装 Docker；创建项目账号（docker 组、无 sudo）
+- [ ] 安装 Docker；创建项目账号（无 sudo；standard 档入 docker 组，按 §2 安全档位选择）
 - [ ] 安装并配置反向代理（如 Caddy）：`<域名>` → `127.0.0.1:<端口>`
 - [ ] 建 `/opt/<项目名>` 并授权项目账号；配置 SSH 部署密钥（不放 root，私钥拷回本地用于 rsync 部署）
 
@@ -127,8 +137,9 @@ rsync -az --delete \
 
 **信息登记**（「位置与引用」类信息）分两层：
 
-- **可推导值可入库**：项目账号（默认 = 项目名）、应用/数据/备份目录（`/opt/<项目名>` 系）、默认密钥路径约定（`~/.ssh/<项目名>_deploy`）——登记进项目 `docs/project/PROJECT_INDEX.md` 的外部资源表与 `docs/guides/deployment.md`（骨架模板见 `assets/deploy/deployment.md.tmpl`）。域名、DNS 托管商与公开联系邮箱属公开信息，默认同样入库。
-- **不可推导值必须隔离**：服务器 IP、SSH 端口、密钥真实路径（偏离默认约定时）、SSH 别名、crontab 具体调度、备份策略细节——只写入本地 `docs/private/ops.md`（`.gitignore` 排除，永不入库，需配独立私有备份通道）；入库文档对应位置只写占位符（`<PRODUCTION_SERVER_IP>`、`<DEPLOY_USER>` 等）+ 指向 ops.md 的注记。容器端口分配可入库（本机回环端口不构成基础设施指纹）。
+- **可推导值可入库**：项目账号（建议默认 = 项目名，可独立修改）、应用/数据/备份目录（`/opt/<项目名>` 系）、默认密钥路径约定（`~/.ssh/<项目名>_deploy`）——登记进项目 `docs/project/PROJECT_INDEX.md` 的外部资源表与 `docs/guides/deployment.md`（骨架模板见 `assets/deploy/deployment.md.tmpl`）。域名、DNS 托管商与公开联系邮箱属公开信息，默认同样入库。
+- **不可推导值必须隔离**：服务器 IP、SSH 端口、密钥真实路径（偏离默认约定时）、SSH 别名、crontab 具体调度、备份策略细节——只写入本地 `docs/private/ops.md`（`.gitignore` 排除，永不入库，需配独立私有备份通道）；其中部署脚本需要的五项（项目名/账号/服务器目录/IP/密钥路径）另以机器可读形式写进 `docs/private/deploy.env`（见下条）。入库文档对应位置只写占位符（`<PRODUCTION_SERVER_IP>`、`<DEPLOY_USER>` 等）+ 指向 ops.md 的注记。容器端口分配可入库（本机回环端口不构成基础设施指纹）。
+- **部署脚本读取 `docs/private/deploy.env`**：部署五事实（`PROJECT_NAME` / `DEPLOY_USER` / `REMOTE_DIR` / `SERVER_IP` / `DEPLOY_KEY`）由该文件显式提供（模板见 `assets/project/deploy.env.tmpl`），脚本不从本地路径推导——三事实分离的落地载体就是它。同属 `.gitignore` 排除范围，永不入库。
 
 **秘密边界**：秘密本体（私钥内容、密码、token）**永不进 Git**，只存在于服务器 `.env` 与用户本地。`.env.example` 入库仅作为结构模板，不带任何真实值。
 

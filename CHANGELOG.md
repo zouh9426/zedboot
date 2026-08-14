@@ -2,6 +2,18 @@
 
 本项目所有值得记录的变更都写在这里。格式约定：每条目回答两个问题——**改了什么**、**为什么这么改（决策理由）**。
 
+## [0.7.0] - 2026-08-14
+
+外部第四轮全仓库审查驱动的**部署体系可靠性/安全性修复版**（审查范围首次覆盖部署模板、pre-push 实际 Git 语义与项目模板全文；编排核心无改动）。含一处行为反转与一处行为变更，见第 1、2 条。
+
+- **修复 pre-push 闸门「新引用推送」场景静默失效（P0，行为修复）**：`assets/hooks/pre-push.tmpl` 在远端已有其他引用、首次推新 branch/tag 时构造 `revs="$local_sha --not --remotes"` 并以 `"$revs"` 整体引用——git 收到的是单个含空格参数，报 `fatal: ambiguous argument`，错误被 `2>/dev/null || true` 吞掉，扫描结果为空即放行，隐私闸门在该场景下从未真正执行（0.5.11 的增量扫描特性形同虚设）。`revs` 改为 bash array、调用处 `"${revs[@]}"`。`tests/test_pre_push.py` 新增两个反向回归用例（新 tag / 新 branch 携带私钥头必须被拦，先实测修复前红、修复后绿）。理由：现有测试只断言"干净提交放行"，扫描没执行时同样绿——闸门类代码必须有"脏内容必拦"的反向用例才算被测试。
+- **静态站发布目录改 fail-closed（P0，行为反转）**：0.5.10 为适配无构建纯 HTML 站加入的「无 dist/ 则推项目根」fallback 会把 `docs/private/`（含服务器 IP/账号的 ops.md）等整个仓库根发布到 Caddy 文件伺服目录，属真实安全漏洞，删除。发布目录改由 `STATIC_OUTPUT_DIR` 显式控制（Vite/Astro=`dist`、Next.js 静态导出=`out`、纯 HTML=`public`），目录不存在即报错退出并给出框架指引，**绝不发布项目根**。迁移说明：无构建纯 HTML 站把网页文件收进 `public/`，或在 `docs/private/deploy.env` 设 `STATIC_OUTPUT_DIR`。理由：发布目录永远不应自动猜，猜错的代价是把私有资料公网化。
+- **Docker 账号安全模型诚实化 + 三档模型（P0，文档级架构修正）**：deployment-guide 原表述「docker 组账号 = 多项目互不越权、最大破坏范围是自己的目录」不成立——Docker 官方文档明确 docker 组等价 root 级权限（可经 docker socket 提权控制整台宿主机）。§2 改为安全档位表：**standard**（默认，保留 docker 组的便利性，但明确标注不构成宿主机安全边界，适用单管理员全可信场景）、**hardened**（账号退出 docker 组 + root-owned 固定 wrapper 与 compose 的受控部署入口，适用不可信代码/AI agent 直接在服务器执行的场景；写明 wrapper 必须与 root-owned compose 配套否则形同虚设）、**isolated**（每项目 Rootless Docker，给官方文档指针与限制说明）。SKILL.md 概览措辞同步。理由：安全声明必须诚实——虚假的安全感比没有安全措施更危险；hardened/isolated 先落成文档方案而非一键模板，避免在可靠性修复版里引入不可测的复杂机制。
+- **Python Dockerfile 修复构建必挂（P0）**：原模板 `USER appuser` 之后才 `COPY` entrypoint + `RUN chmod`——COPY 产物属 root，非 root 非属主 chmod 必然 Operation not permitted，照模板构建直接失败。改为 `COPY --chown=appuser:appuser --chmod=755` 一步到位后再切 USER。理由：模板的第一职责是构建能过。
+- **部署脚本落实三事实分离 + rsync 排除 docs/private（P1）**：两个 rsync 脚本模板删除 `basename` 链路推导（本地目录名→项目名→账号→服务器目录），改为 source `docs/private/deploy.env`（新增 `assets/project/deploy.env.tmpl`，部署五事实 `PROJECT_NAME`/`DEPLOY_USER`/`REMOTE_DIR`/`SERVER_IP`/`DEPLOY_KEY` 显式提供、私有不入库）后逐项 `:?` 强制校验；rsync 排除项追加 `--exclude docs/private`（此前每次部署都把定义为"本地私有"的 ops.md 同步上服务器）；deployment-guide §4 示例命令与 §6 信息登记同步。理由：三事实分离是 info-collection 的既有设计，脚本层却在默认重新合并；REMOTE_DIR 此前连覆盖口都没有。
+- **Go / Next.js 模板修正（P1）**：Go 模板 `go build -o ... ./...` 参数化为 `ARG GO_MAIN_PACKAGE=./cmd/server`（`./...` 多 package 配 `-o` 单文件在典型 cmd/server 布局报错）；Next.js 模板 Prisma CLI 版本从硬编码 `prisma@5` 改为构建时读项目 package.json（prisma-cli 阶段补 `COPY package.json ./`），entrypoint 从内部路径 `prisma/build/index.js` 改为公开入口 `.bin/prisma`。理由：模板要么通用要么参数化，硬编码大版本与内部布局都会随上游演进悄悄坏掉。
+- **项目模板与文档口径清理（P1/P2）**：①项目 AGENTS 模板机械三查从全仓库递归 grep（会扫 .env/docs/private/node_modules，与"永不读 .env"自相矛盾）改为 `git ls-files -co --exclude-standard` 的 git candidate 口径，与 verify.py 一致；②docs-README 模板"接手当前任务"清单与 AGENTS 分层加载对齐（RULES/INDEX 按需）；③info-collection L23 推导值表述标注"建议默认约定、以 deploy.env 为准"，消除与三事实分离的内部张力；④init/adopt 的 verify 收口命令改为完整形式 `python3 <skill路径>/scripts/verify.py`（verify.py 不进目标项目、无执行位）；⑤init/adopt 落盘清单补 deploy.env；⑥README 双语、tests.yml step 名、根 AGENTS.md 的 tests 描述补上 pre-push hook 测试。理由：口径不一致的文件会随安装拷进每个新项目，矛盾复制比矛盾本身更贵。
+
 ## [0.6.2] - 2026-08-14
 
 外部第三轮复检驱动的校验语义补全 + 文档口径清理。

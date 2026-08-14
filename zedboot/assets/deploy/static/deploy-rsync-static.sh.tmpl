@@ -3,46 +3,43 @@ set -euo pipefail
 
 # ============================================================
 # 静态站发布脚本（本地执行，zedboot skill 模板）
-# 流程：本地 `npm run build` → 本脚本只同步 dist/ → 服务器 Caddy 直接伺服
+# 流程：本地 `npm run build` → 本脚本只同步发布目录 → 服务器 Caddy 直接伺服
 # 落地：复制到本地项目根目录为 deploy-rsync-static.sh
-# 隐私线：本脚本入库，只保留占位符；真实值统一存本地 docs/private/ops.md
-#   （已 gitignore，永不入库），部署时经环境变量传入：
-#     PRODUCTION_SERVER_IP=… ./deploy-rsync-static.sh
+# 隐私线：本脚本入库，只保留占位符；部署五事实（项目名/账号/目录/IP/密钥）
+#   统一存本地 docs/private/deploy.env（已 gitignore，永不入库），本脚本自动 source
 # 对应 references/deployment-guide.md §4 与 assets/deploy/static/README.md
 # ============================================================
 
-# ---- 路径自推导（脚本落盘在项目根目录；本地目录名 = 项目名 = 服务器 /opt/ 目录名）----
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_NAME="$(basename "${PROJECT_DIR}")"
 
-# ---- 变量区（默认值均为可推导约定；隔离真实值经环境变量传入，见 docs/private/ops.md）----
-DEPLOY_USER="${DEPLOY_USER:-${PROJECT_NAME}}"                 # 默认约定：账号 = 项目名
-SERVER_IP="${PRODUCTION_SERVER_IP:-<PRODUCTION_SERVER_IP>}"   # 真实值见 docs/private/ops.md，不入库
-SSH_KEY="${DEPLOY_KEY:-~/.ssh/${PROJECT_NAME}_deploy}"        # 默认约定；偏离时经 DEPLOY_KEY 传入
-REMOTE_DIR="/opt/${PROJECT_NAME}/dist"
+# 部署事实来自 docs/private/deploy.env（三事实分离，不从路径推导）
+if [ -f "${PROJECT_DIR}/docs/private/deploy.env" ]; then
+  # shellcheck disable=SC1091
+  . "${PROJECT_DIR}/docs/private/deploy.env"
+fi
+: "${PROJECT_NAME:?请在 docs/private/deploy.env 中设置 PROJECT_NAME}"
+: "${DEPLOY_USER:?请在 docs/private/deploy.env 中设置 DEPLOY_USER}"
+: "${REMOTE_DIR:?请在 docs/private/deploy.env 中设置 REMOTE_DIR}"
+: "${SERVER_IP:?请在 docs/private/deploy.env 中设置 SERVER_IP}"
+: "${DEPLOY_KEY:?请在 docs/private/deploy.env 中设置 DEPLOY_KEY}"
 
-if [[ "${SERVER_IP}" == "<PRODUCTION_SERVER_IP>" ]]; then
-  echo "[deploy] 未提供服务器 IP。真实值见 docs/private/ops.md，用法：PRODUCTION_SERVER_IP=… $0" >&2
+# ---- 形态适配：发布目录由 STATIC_OUTPUT_DIR 控制（fail-closed，绝不发布项目根）----
+# 发布目录按框架：Vite/Astro=dist，Next.js 静态导出=out，纯 HTML=public；
+# 非默认值时在 docs/private/deploy.env 中设 STATIC_OUTPUT_DIR
+STATIC_OUTPUT_DIR="${STATIC_OUTPUT_DIR:-dist}"
+SOURCE_DIR="${PROJECT_DIR}/${STATIC_OUTPUT_DIR}"
+if [ ! -d "${SOURCE_DIR}" ]; then
+  echo "未找到发布目录 ${SOURCE_DIR}。" >&2
+  echo "请先构建，或按框架设置 STATIC_OUTPUT_DIR（Vite/Astro=dist，Next.js 静态导出=out，纯 HTML=public）。" >&2
   exit 1
 fi
 
-# ---- 形态适配：有 dist/ 推 dist/（构建型静态站）；无 dist/ 推站点根网页文件 ----
-# 两种形态：
-#   A) 构建型（Astro / Vite / Next.js 静态导出等）：npm run build 产物在 dist/，只推 dist/
-#   B) 无构建型（手写 HTML/CSS，站点根即网页根）：没有 dist/，推站点根（index.html 与 css/ 等）
-# 若构建产物目录名不是 dist/（如 public/、build/），把下方 SOURCE_DIR 改成对应目录即可。
-SOURCE_DIR="${PROJECT_DIR}/dist"
-if [ ! -d "${SOURCE_DIR}" ]; then
-  echo "[deploy] 未找到 dist/，按「无构建静态站」处理：推送站点根网页文件（index.html 与 css/ 等）"
-  SOURCE_DIR="${PROJECT_DIR}"
-fi
-
-# ---- 同步网页文件（只推站点内容，排除敏感与备份）----
-# 无构建形态下站点根若混有非网页目录（docs/、node_modules/ 等），在 --exclude 后追加排除项
+# ---- 同步网页文件（只推发布目录，排除敏感与备份）----
 echo "[deploy] 同步 ${SOURCE_DIR}/ → ${DEPLOY_USER}@${SERVER_IP}:${REMOTE_DIR}/"
 rsync -az --delete \
   --exclude .git --exclude .env --exclude backups \
-  -e "ssh -i ${SSH_KEY}" \
+  --exclude docs/private \
+  -e "ssh -i ${DEPLOY_KEY}" \
   "${SOURCE_DIR}/" "${DEPLOY_USER}@${SERVER_IP}:${REMOTE_DIR}/"
 
 echo "[deploy] 完成。Caddy 直接伺服该目录，无需重启；"

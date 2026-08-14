@@ -72,18 +72,18 @@ while read -r local_ref local_sha remote_ref remote_sha; do
     # tag 时重复拦截；远程全空（真·首次推送）时退化为全历史扫描。
     if [ -n "$(git for-each-ref refs/remotes/ 2>/dev/null)" ]; then
       range_desc="$local_ref 远程未有的提交（新引用）"
-      revs="$local_sha --not --remotes"
+      revs=("$local_sha" --not --remotes)
     else
       range_desc="$local_ref 全部历史（首次推送）"
-      revs="$local_sha"
+      revs=("$local_sha")
     fi
   else
     range_desc="${remote_sha:0:7}..${local_sha:0:7}"
-    revs="${remote_sha}..${local_sha}"
+    revs=("${remote_sha}..${local_sha}")
   fi
 
   # 只取新增行（排除 +++ 文件头）；git log -p 自动跳过二进制内容
-  added="$(git log -p --format= "$revs" 2>/dev/null | grep -E '^\+' | grep -vE '^\+\+\+' || true)"
+  added="$(git log -p --format= "${revs[@]}" 2>/dev/null | grep -E '^\+' | grep -vE '^\+\+\+' || true)"
   [ -z "$added" ] && continue
 
   # 1. 私钥格式头

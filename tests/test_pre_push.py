@@ -325,6 +325,70 @@ class TestPrePushPrivacyGate(unittest.TestCase):
         self.assertEqual(git_rev(bare, "refs/tags/v1.0.0"),
                          git_rev(repo, "refs/tags/v1.0.0"))
 
+    def test_new_tag_dirty_commit_blocked(self):
+        """用例 8a：远端已有干净 main（远程非空），本地新增含私钥头的提交并打新
+        tag，首次 push 该 tag（remote_sha 全零的新引用）→ 增量扫描（`rev-list
+        <sha> --not --remotes`）应命中脏提交 → 拦截（exit 1），远程 tag 不推进。
+        回归钉死真实 bug：revs 曾以字符串 "$local_sha --not --remotes" 传给
+        git log——双引号使整串成为单个参数，git 报 ambiguous argument，错误被
+        2>/dev/null 吞掉 → 扫描静默跳过、push 放行（远端已有引用时首次推新
+        tag 的场景漏闸）。"""
+        repo, bare = build_fixture(self.root)
+        # 1) 装钩子前推干净 main（远端已有引用，新 tag 走增量扫描分支）
+        _write(os.path.join(repo, "README.md"), "# demo\n\nclean base.\n")
+        git_commit(repo, message="base", add=["README.md"])
+        p = git_push(repo, "main")
+        self.assertEqual(p.returncode, 0, p.stderr)
+        # 2) fetch 建立 refs/remotes/origin/main（增量扫描依赖远程跟踪引用）
+        _git(repo, "fetch", "-q", "origin")
+        self.assertNotEqual(
+            _git(repo, "for-each-ref", "refs/remotes/").stdout.strip(), "",
+            "fetch 后本地应存在远程跟踪引用")
+        # 3) 装钩子，新增含私钥头的提交并打新 tag
+        install_hook(repo)
+        key_head = "-----BEGIN" + " OPENSSH PRIVATE KEY-----"
+        _write(os.path.join(repo, "deploy-keys.txt"), "key = %s\n" % key_head)
+        git_commit(repo, message="add key", add=["deploy-keys.txt"])
+        _git(repo, "tag", "v1.0.0")
+        dirty_sha = git_rev(repo, "HEAD")
+        self.assertIn(dirty_sha,
+                      _git(repo, "rev-list", dirty_sha, "--not",
+                           "--remotes").stdout.split(),
+                      "前置：脏提交应在增量范围内（否则本用例测不到扫描语义）")
+        # 4) 首次 push 新 tag → 增量扫描命中脏提交 → 拦截
+        p = git_push(repo, "v1.0.0")
+        self.assertNotEqual(p.returncode, 0)
+        self.assertIn("拦截", p.stderr)
+        self.assertIn("私钥格式头", p.stderr)
+        self.assertIsNone(git_rev(bare, "refs/tags/v1.0.0"),
+                          "拦截后远程 tag 不应推进")
+
+    def test_new_branch_dirty_commit_blocked(self):
+        """用例 8b：同 8a 的脏提交推新分支 feature/x（remote_sha 全零的新引用）
+        → 增量扫描命中 → 拦截（exit 1），远程分支不推进。与 8a 同根因：revs 单
+        字符串 bug 同样会让新分支的首次推送静默放行。"""
+        repo, bare = build_fixture(self.root)
+        # 1) 装钩子前推干净 main
+        _write(os.path.join(repo, "README.md"), "# demo\n\nclean base.\n")
+        git_commit(repo, message="base", add=["README.md"])
+        p = git_push(repo, "main")
+        self.assertEqual(p.returncode, 0, p.stderr)
+        _git(repo, "fetch", "-q", "origin")
+        self.assertNotEqual(
+            _git(repo, "for-each-ref", "refs/remotes/").stdout.strip(), "",
+            "fetch 后本地应存在远程跟踪引用")
+        # 2) 装钩子，新增含私钥头的提交，push 新分支
+        install_hook(repo)
+        key_head = "-----BEGIN" + " OPENSSH PRIVATE KEY-----"
+        _write(os.path.join(repo, "deploy-keys.txt"), "key = %s\n" % key_head)
+        git_commit(repo, message="add key", add=["deploy-keys.txt"])
+        p = git_push(repo, "HEAD:refs/heads/feature/x")
+        self.assertNotEqual(p.returncode, 0)
+        self.assertIn("拦截", p.stderr)
+        self.assertIn("私钥格式头", p.stderr)
+        self.assertIsNone(git_rev(bare, "refs/heads/feature/x"),
+                          "拦截后远程分支不应推进")
+
     def test_unreplaced_placeholder_degrades(self):
         """用例 9：<项目名> 未替换（原样安装）→ PROJECT_NAME 降级为空：目录名
         派生路径 /home/<目录名>/ 仍放行；项目名形态路径 /home/<项目名>/（与

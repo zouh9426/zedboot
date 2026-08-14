@@ -58,10 +58,12 @@
 **机械三查**（复制即跑，前两条无输出才算过）：
 
 ```bash
-grep -rnE '/Users/[a-zA-Z0-9_-]+/' . --exclude-dir=.git
-grep -rnE 'BEGIN [A-Z ]*PRIVATE KEY' . --exclude-dir=.git
+git ls-files -co --exclude-standard | xargs grep -nE '/Users/[a-zA-Z0-9_-]+/'
+git ls-files -co --exclude-standard | xargs grep -nE 'BEGIN [A-Z ]*PRIVATE KEY'
 git status --short
 ```
+
+> 扫描范围 = git candidate 文件（已跟踪 + 未跟踪且未被 `.gitignore` 排除，与 verify.py 口径一致）；`.env`、`docs/private/` 等已被 `.gitignore` 排除——既不会被读取也不需要扫描。前两条有输出就不许 commit。
 
 **五个维度与处置**：
 
