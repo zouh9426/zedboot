@@ -43,7 +43,7 @@
 - 缓存
 - 日志
 - 大型二进制文件
-- .env 与任何密钥文件（永不读取内容，永不入库）
+- .env* 与任何密钥文件（永不读取内容，永不入库）
 
 ## 当前写入规则
 
@@ -63,7 +63,7 @@ git ls-files -coz --exclude-standard | xargs -0 grep -nE 'BEGIN [A-Z ]*PRIVATE K
 git status --short
 ```
 
-> 扫描范围 = git candidate 文件（已跟踪 + 未跟踪且未被 `.gitignore` 排除，与 verify.py 口径一致）；`.env`、`docs/private/` 等已被 `.gitignore` 排除——既不会被读取也不需要扫描。命令用 `-z`/`-0` 以 NUL 分隔文件名，防空格/换行等特殊文件名被拆断。前两条有输出就不许 commit。
+> 扫描范围 = git candidate 文件（已跟踪 + 未跟踪且未被 `.gitignore` 排除，与 verify.py 口径一致）；`.env*`、`docs/private/` 等已被 `.gitignore` 排除——既不会被读取也不需要扫描。命令用 `-z`/`-0` 以 NUL 分隔文件名，防空格/换行等特殊文件名被拆断。前两条有输出就不许 commit。
 
 **五个维度与处置**：
 

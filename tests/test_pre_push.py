@@ -17,17 +17,20 @@ pre-push 钩子，用真实 `git push` 端到端触发，断言退出码、拦�
      目标远程本地无 tracking refs（真·首次推送/从未 fetch 过该远程）时排除集
      为空，自动退化为全历史扫描（fail-closed）；remote_name 为空（非 git 正常
      调用路径）时同样退化全历史扫描（空模式的 --remotes= 会排除所有远程）。
-  3. 拦截三类「新增行」（git log -p --first-parent -m 排除 +++ 文件头；
-     -m 使 merge commit 的 diff 按主线视角可见一次，冲突解决引入的敏感行不
-     漏扫）：
+  3. 拦截三类「新增行」（git log -p -m 排除 +++ 文件头；不用 --first-parent
+     ——侧分支历史也是推送内容必须扫描，--first-parent 只遍历第一父代会使侧
+     分支泄露在合回 main 后不可见（P0）；-m 使 merge commit 对双父各出一次
+     diff，冲突解决引入的敏感行不漏扫）：
      a. 私钥格式头（BEGIN ... PRIVATE KEY）
      b. /Users/<名>/ 与 /home/<名>/ 本机绝对路径（正则要求尾部斜杠）
      c. 公网 IPv4（已排除 0./10./127./169.254./192.168./172.16-31./
         RFC 5737 文档段/受限广播）
-  4. 路径级拦截：新增文件路径命中 .env* 变体（.env / .env.local /
+  4. 路径级拦截：文件路径命中 .env* 变体（.env / .env.local /
      .env.production 等任意变体，含子目录内）一律拦截；.env.example /
-     .env.sample / .env.template 例外放行。在内容检查之前独立执行（内容扫描
-     为空时路径检查仍须生效）。
+     .env.sample / .env.template 例外放行。git log --diff-filter=ACR 同时覆盖
+     Added 与 rename 检出（git mv .env.example .env.production 识别为 R100，
+     目标路径同样命中——--diff-filter=A 只筛 Added，rename 提交无输出漏闸，
+     P1）。在内容检查之前独立执行（内容扫描为空时路径检查仍须生效）。
   5. 放行集合（三事实分离）：/home/<仓库目录名>/、/home/<项目名>/（安装时已
      替换）、docs/private/deploy.env 的 DEPLOY_USER（机器真源，去引号去空白）
      或 docs/private/ops.md「机器可读字段」（旧项目 fallback，键后中/英文冒号
@@ -589,6 +592,56 @@ class TestPrePushPrivacyGate(unittest.TestCase):
         self.assertNotEqual(p.returncode, 0)
         self.assertIn("本机绝对路径", p.stderr)
         self.assertIn(OTHER_ACCOUNT, p.stderr)
+
+    def test_side_branch_leak_deleted_merged_blocked(self):
+        """用例 15：侧分支历史泄露（加私钥头→再删除）--no-ff 合回 main，工作树
+        干净但侧分支历史有私钥 → push main 必须拦截（P0）。修复前 --first-parent
+        只遍历第一父代主线，侧分支提交对扫描不可见，泄露放行；去掉后侧分支历史
+        同样纳入扫描（侧分支历史也是推送内容）。"""
+        repo, bare = build_fixture(self.root)
+        install_hook(repo)
+        _write(os.path.join(repo, "README.md"), "# demo\n\nbase.\n")
+        git_commit(repo, message="base", add=["README.md"])
+        # feature 分支：提交加私钥头 → 再提交删除（最终树干净，泄露只在历史）
+        _git(repo, "checkout", "-q", "-b", "feature")
+        key_head = "-----BEGIN" + " OPENSSH PRIVATE KEY-----"
+        _write(os.path.join(repo, "deploy-keys.txt"), "key = %s\n" % key_head)
+        git_commit(repo, message="add key", add=["deploy-keys.txt"])
+        _git(repo, "rm", "-q", "deploy-keys.txt")
+        git_commit(repo, message="delete key")
+        self.assertFalse(os.path.exists(os.path.join(repo, "deploy-keys.txt")),
+                         "前置：合回前工作树已无泄露文件")
+        # --no-ff 合回 main（无冲突，净变化为空），工作树依旧干净
+        _git(repo, "checkout", "-q", "main")
+        _git(repo, "merge", "-q", "--no-ff", "-m", "merge feature", "feature")
+        self.assertFalse(os.path.exists(os.path.join(repo, "deploy-keys.txt")),
+                         "前置：合并后工作树应干净（泄露只在侧分支历史）")
+        p = git_push(repo, "main")
+        self.assertNotEqual(p.returncode, 0, "侧分支历史的私钥必须被拦")
+        self.assertIn("拦截", p.stderr)
+        self.assertIn("私钥格式头", p.stderr)
+        self.assertIsNone(git_rev(bare, "refs/heads/main"),
+                          "拦截后远程不应推进")
+
+    def test_env_rename_blocked(self):
+        """用例 16：.env.example 被 git mv 为 .env.production（rename R100）→
+        push 必须拦截（P1）。修复前 --diff-filter=A 只筛 Added，rename 提交在
+        --name-only 下无输出（R 不命中 A 过滤），新路径不可见漏闸；改为
+        --diff-filter=ACR 后 rename 检出输出目标路径 .env.production → 路径
+        检查命中。"""
+        repo, bare = build_fixture(self.root)
+        install_hook(repo)
+        _write(os.path.join(repo, ".env.example"), "DB_PASSWORD=clean\n")
+        git_commit(repo, message="add env example", add=[".env.example"])
+        _git(repo, "mv", ".env.example", ".env.production")
+        git_commit(repo, message="rename to prod")
+        p = git_push(repo, "main")
+        self.assertNotEqual(p.returncode, 0,
+                            "rename 成的 .env.production 必须被拦")
+        self.assertIn("拦截", p.stderr)
+        self.assertIn(".env.production", p.stderr)
+        self.assertIsNone(git_rev(bare, "refs/heads/main"),
+                          "拦截后远程不应推进")
 
 
 if __name__ == "__main__":

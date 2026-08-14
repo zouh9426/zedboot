@@ -17,7 +17,7 @@
 - 完整参考版（`references/project-rules-reference.md`）默认**不复制进项目**；此时 AGENTS.md 里"完整参考版位置"一行注明"未随项目安装，见 zedboot skill 的 references/ 目录"。用户明确要求随项目安装时，复制到 `docs/reference/PROJECT_RULES_REFERENCE.md` 并改写该行。
 - 项目模式写入 PROJECT_INDEX 与 PROJECT_STATE；项目代码确定后，TODO 第一个任务 = 本项目的上线 Checklist（可部署项目）或第一个真实任务。
 - 只创建当前实际需要的目录，不机械全建（管理规范 §4 自适应目录规则）。
-- **Git 与隐私防线（所有启用 Git 的项目；可部署/混合默认启用，无部署项目按 Phase 0.B 的选择）**：初始化本地仓库 + `main` 分支 + 首次 commit，按 Phase 0.B 关联私有远程（**此时不 push**——push 随首次发布进行）；`.gitignore` 必须含 `.env*`（附 `!.env.example` / `!.env.sample` / `!.env.template` 例外行，保证模板文件可入库）、`data/`、`backups/`、`docs/private/`；安装 pre-push 隐私闸门（`assets/hooks/pre-push.tmpl` 复制为 `.git/hooks/pre-push` 并 `chmod +x`，**安装时把模板顶部的 `<项目名>` 替换为项目名**（未替换时闸门自动降级，仅放行目录名派生路径）；**服务器账号无需安装时配置**——闸门运行时读取 `docs/private/ops.md`「机器可读字段」（三事实分离，见 `info-collection.md` 存储纪律）；已存在则不覆盖，提示人工合并；`.git/hooks` 不随 clone 携带，新机器/重新克隆后重跑本步骤重装）；装完探测 `git config core.hooksPath`——非空时 `.git/hooks` 会被整体忽略，须确认该 hooksPath 下的全局钩子会链式调用项目级钩子，无法确认则醒目警告用户并把结论记入 PROJECT_STATE（结论用 `~/…` 相对表达，不写本机绝对路径——入库文件纪律））。
+- **Git 与隐私防线（所有启用 Git 的项目；可部署/混合默认启用，无部署项目按 Phase 0.B 的选择）**：初始化本地仓库 + `main` 分支 + 首次 commit，按 Phase 0.B 关联私有远程（**此时不 push**——push 随首次发布进行）；`.gitignore` 必须含 `.env*`（附 `!.env.example` / `!.env.sample` / `!.env.template` 例外行，保证模板文件可入库）、`data/`、`backups/`、`docs/private/`；安装 pre-push 隐私闸门（`assets/hooks/pre-push.tmpl` 复制为 `.git/hooks/pre-push` 并 `chmod +x`，**安装时把模板顶部的 `<项目名>` 替换为项目名**（未替换时闸门自动降级，仅放行目录名派生路径）；**服务器账号无需安装时配置**——闸门运行时读取 `docs/private/deploy.env` 的 `DEPLOY_USER`（`ops.md`「机器可读字段」为旧项目 fallback；三事实分离，见 `info-collection.md` 存储纪律）；已存在则不覆盖，提示人工合并；`.git/hooks` 不随 clone 携带，新机器/重新克隆后重跑本步骤重装）；装完探测 `git config core.hooksPath`——非空时 `.git/hooks` 会被整体忽略，须确认该 hooksPath 下的全局钩子会链式调用项目级钩子，无法确认则醒目警告用户并把结论记入 PROJECT_STATE（结论用 `~/…` 相对表达，不写本机绝对路径——入库文件纪律））。
 
 ## 2. 装部署体系（可部署/混合项目）
 
@@ -25,7 +25,7 @@
   - 静态站点：无应用容器，按 `assets/deploy/static/README.md`——本地构建、rsync 只推发布目录（`STATIC_OUTPUT_DIR`：Vite/Astro=`dist`、Next.js 静态导出=`out`、纯 HTML=`public`）、服务器共享 Caddy 直接伺服。**不装 backup.sh**（容器栈数据备份脚本；静态站无应用数据，其数据备份由 zedback 经 manifest 的 `ZB_PULLS` 拉取站点产物目录（如 `dist/`）承担，见 `assets/project/backup-manifest.conf.tmpl` 注释）。
   - 脚本落盘后统一 `chmod +x`（执行位兜底，防模板来源或拷贝方式丢位）：`docker-entrypoint.sh`（nextjs/python 栈；go 栈无此文件，跳过）、`backup.sh`、`deploy-rsync.sh`（静态站点为 `deploy-rsync-static.sh`）。
 - 生成 `docs/guides/deployment.md`（容器栈用 `assets/deploy/deployment.md.tmpl`，静态站点用 `assets/deploy/deployment-static.md.tmpl`；入库文件只写占位符，真实运维值按下条入 ops.md）。
-- 生成 `docs/private/ops.md`（用 `assets/project/ops.md.tmpl`，填入 Phase 0 采集的真实运维值；其中「机器可读字段」节的「服务器账号」行是 pre-push 闸门与 audit.py 运行时放行的依据，见 `info-collection.md` 存储纪律三事实分离），并提醒用户：ops.md 不进 Git、无版本备份，需配独立私有备份通道（如私有 ops-notes 仓库）。
+- 生成 `docs/private/ops.md`（用 `assets/project/ops.md.tmpl`，填入 Phase 0 采集的真实运维值；其中 `deploy.env` 的 `DEPLOY_USER` 是 pre-push 闸门与 audit.py 运行时放行的机器真源（旧项目无 deploy.env 时回退 `ops.md`「机器可读字段」节的「服务器账号」行），见 `info-collection.md` 存储纪律三事实分离），并提醒用户：ops.md 不进 Git、无版本备份，需配独立私有备份通道（如私有 ops-notes 仓库）。
 - 生成 `docs/private/deploy.env`（模板 `assets/project/deploy.env.tmpl`：部署五事实 `PROJECT_NAME`/`DEPLOY_USER`/`REMOTE_DIR`/`SERVER_IP`/`DEPLOY_KEY` 由该文件显式提供，脚本不从本地路径推导——三事实分离的落地载体；同属 `.gitignore` 排除，私有不入库）。
 - 生成 `docs/private/backup-manifest.conf`（模板 `assets/project/backup-manifest.conf.tmpl`）：zedback 每日备份按它拉取服务器数据，字段含义见模板注释；无部署项目不生成；**首次部署完成后必须更新该清单**：`ZB_DEPLOYED` 翻为 true 并填实 `ZB_SSH_TARGET`/`ZB_SSH_KEY`/`ZB_SERVER_DIR`/`ZB_PULLS`（键名以模板注释为准，一律 ZB_ 前缀；部署动作与改卡是同一流程的一部分）。
 - 上线 Checklist（`assets/checklists/go-live-checklist.md`）登记为 TODO 任务；静态站点先按文件内「静态站点（无容器）替代说明」区块裁剪再登记，剔除永远完不成的 Docker 条目。

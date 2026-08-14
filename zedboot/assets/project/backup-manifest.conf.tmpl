@@ -8,7 +8,7 @@ ZB_DEPLOYED=false                      # 已部署到服务器=true；有部署�
 #   翻 true 时必须同时填实 ZB_SSH_TARGET / ZB_SSH_KEY / ZB_SERVER_DIR / ZB_PULLS，否则服务器数据静默不进备份。
 ZB_SSH_TARGET="<DEPLOY_USER>@<PRODUCTION_SERVER_IP>"   # 或 ~/.ssh/config 里的别名
 ZB_SSH_KEY="<DEPLOY_KEY>"              # 私钥文件名（相对 ~/.ssh），灾难恢复随包携带，必填
-ZB_SERVER_DIR="/opt/<项目名>"
+ZB_SERVER_DIR="<REMOTE_DIR>"           # 填 deploy.env 中 REMOTE_DIR 的实际值
 #   ⚠️ 静态站（无容器、无 data/.env）改为：ZB_PULLS="dist/"（或站点产物目录）——
 #   静态站的数据备份就是服务器上的站点产物目录本身，拉 dist/ 即完整备份；
 #   容器栈保持默认 "data/ backups/ .env"。

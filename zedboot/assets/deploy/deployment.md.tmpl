@@ -29,8 +29,9 @@
   # 本地：合回 main 后先 push 备份，再执行部署脚本
   # 部署五事实由 docs/private/deploy.env 提供（脚本读取），实现以 deploy-rsync.sh 为准，本文不复制命令
   git push && ./deploy-rsync.sh
-  # 服务器：重建并自动迁移
-  cd /opt/<项目名> && docker compose up -d --build
+  # 服务器：重建并自动迁移（进入 docs/private/deploy.env 的 REMOTE_DIR 后执行，
+  # 即 deploy-rsync.sh 输出提示的服务器命令；REMOTE_DIR 为运行时值，不写死路径）
+  cd ${REMOTE_DIR} && docker compose up -d --build   # 启动时自动迁移
   ```
 
 - **看日志**：`docker compose logs -f <项目名>`

@@ -501,6 +501,30 @@ class TestEnvVariantAndDeployUser(unittest.TestCase):
         self.assertFalse(self.g["risk_env_tracked"])
         self.assertFalse(self.g["env_tracked"])
 
+    def test_tracked_subdir_env_variant_is_risk(self):
+        """P1 回归钉：config/.env.local 被强制跟踪 → 报风险并点名变体。
+        旧实现 `git ls-files -- .env*` 的 pathspec 无斜杠不跨目录，匹配
+        不到子目录变体而漏检；改全量 ls-files -z + basename 过滤后必须命中。"""
+        d = os.path.join(self._td.name, "subdirenv")
+        os.makedirs(os.path.join(d, "config"))
+        _git(d, "init", "-q", "-b", "main")
+        with open(os.path.join(d, ".gitignore"), "w", encoding="utf-8") as f:
+            f.write(".env*\n")
+        with open(os.path.join(d, "config/.env.local"), "w",
+                  encoding="utf-8") as f:
+            f.write("PUBLIC_IP=240.0.0.1\n")
+        with open(os.path.join(d, "README.md"), "w", encoding="utf-8") as f:
+            f.write("# demo\n")
+        _git(d, "add", "-A")
+        _git(d, "add", "-f", "config/.env.local")
+        _git(d, "-c", "user.name=test", "-c", "user.email=test@example.com",
+             "commit", "-q", "-m", "init")
+        g = audit_json(d)["sections"]["git"]
+        self.assertTrue(g["risk_env_variant_tracked"])
+        self.assertIn(".env.local", g["env_variants_tracked"])
+        self.assertFalse(g["env_tracked"])
+        self.assertFalse(g["risk_env_tracked"])
+
     def test_env_example_tracked_not_flagged(self):
         """.env.example 是例外名（只登记键名、无敏感内容），被跟踪不报风险。"""
         self.assertNotIn(".env.example", self.g["env_variants_tracked"])

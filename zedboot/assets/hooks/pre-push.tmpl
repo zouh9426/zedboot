@@ -108,6 +108,14 @@ while read -r local_ref local_sha remote_ref remote_sha; do
   # 等任意变体（含子目录内，如 config/.env.local）一律拦截，例外放行 .env.example /
   # .env.sample / .env.template。放在内容检查之前独立执行：内容扫描为空（本次推送
   # 无新增行）时路径检查仍须生效，两者任一命中即拦。
+  # --diff-filter=ACR：A 覆盖新增、C/R 覆盖修改/rename——git mv .env.example
+  #   .env.production 识别为 R100，只筛 A 时 rename 提交无输出、新路径不可见漏闸
+  #   （P1 修复）。rename 检出由 diff.renames 默认开启（无需显式 -M），ACR 下
+  #   --name-only 输出目标路径。
+  # 不用 --first-parent：侧分支历史也是推送内容必须扫描——feature 加私钥→删除→
+  #   --no-ff 合回 main 后工作树干净，--first-parent 只走主线看不到侧分支提交，
+  #   泄露放行（P0 修复）；-m 使 merge 对双父各出一次 diff，路径行重复但存在性
+  #   检查无害（下有 sort -u 去重）。
   bad_env=""
   while IFS= read -r f; do
     [ -z "$f" ] && continue
@@ -118,14 +126,18 @@ while read -r local_ref local_sha remote_ref remote_sha; do
     case "$base" in
       .env|.env.*) bad_env="$f"; break ;;
     esac
-  done < <(git log --name-only --format= --first-parent -m --diff-filter=A "${revs[@]}" 2>/dev/null | sort -u || true)
+  done < <(git log --name-only --format= -m --diff-filter=ACR "${revs[@]}" 2>/dev/null | sort -u || true)
   [ -n "$bad_env" ] && report ".env* 环境变量文件（$bad_env）" "$range_desc"
 
   # 只取新增行（排除 +++ 文件头）；git log -p 自动跳过二进制内容。
-  # --first-parent -m：默认 git log -p 不显示 merge commit 的 diff——发布流程是
-  # --no-ff 合回 main，冲突解决引入的敏感行会漏扫（P1 修复）；该组合按主线视角
-  # 只出一次 diff（合并相对第一父代的净变化，含冲突解决的新增行）。
-  added="$(git log -p --first-parent -m --format= "${revs[@]}" 2>/dev/null | grep -E '^\+' | grep -vE '^\+\+\+' || true)"
+  # -m：默认 git log -p 不显示 merge commit 的 diff——发布流程是 --no-ff 合回
+  #   main，冲突解决引入的敏感行会漏扫（P1 修复）；-m 使 merge 对双父各出一次
+  #   diff，冲突解决的新增行可见。
+  # 不用 --first-parent：侧分支历史也是推送内容必须扫描——feature 加私钥→删除→
+  #   --no-ff 合回 main 后工作树干净，--first-parent 只走主线（合并相对第一父代
+  #   的净变化为空）看不到侧分支提交，泄露放行（P0 修复）。去掉后 git log 沿全部
+  #   父代遍历，侧分支里的新增行同样被扫到。
+  added="$(git log -p -m --format= "${revs[@]}" 2>/dev/null | grep -E '^\+' | grep -vE '^\+\+\+' || true)"
   [ -z "$added" ] && continue
 
   # 1. 私钥格式头

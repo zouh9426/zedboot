@@ -597,17 +597,20 @@ def detect_git(root):
     else:
         data["prefixed_branches_note"] = note or "git branch 命令失败，交由 AI 判断"
 
-    # .env* 环境文件是否被 git 跟踪（安全风险项）：以 git ls-files 为真源，
-    # 覆盖 .env 与 .env.local / .env.production 等全部变体（例外名除外）。
-    # 磁盘上不存在但仍在索引/历史里的变体同样会被列出（跟踪即泄露事故）。
-    ok, out, err, note = _run_git(root, ["ls-files", "--", ".env*"])
+    # .env* 环境文件是否被 git 跟踪（安全风险项）：以 git ls-files -z 全量为真源，
+    # Python 端按 basename 用 _is_env_file() 过滤，覆盖项目根与任意子目录下的
+    # .env / .env.local / config/.env.production 等全部变体（例外名除外）。
+    # （git pathspec `.env*` 无斜杠不跨目录，会漏掉 config/.env.local 这类
+    # 子目录变体，故改全量 + 过滤。）磁盘上不存在但仍在索引/历史里的变体
+    # 同样会被列出（跟踪即泄露事故）。
+    ok, out, _, note = _run_git(root, ["ls-files", "-z"])
     if note is not None:
         data["env_tracked"] = None
         data["env_tracked_note"] = note
         data["env_variants_tracked"] = None
     else:
         tracked = []
-        for rel in (l.strip() for l in out.splitlines() if l.strip()):
+        for rel in (p for p in out.split("\0") if p):
             name = os.path.basename(rel)
             if _is_env_file(name) and name not in tracked:
                 tracked.append(name)

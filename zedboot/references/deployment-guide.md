@@ -153,7 +153,7 @@ Dockerfile 多阶段构建（四阶段）：
 |---|---|
 | `deps` | `npm ci` 安装依赖；`npm rebuild <原生模块>` 兜底（postinstall 可能被 npm 脚本策略拦截） |
 | `builder` | 复用 deps 的 node_modules，生成 Prisma Client，构建 standalone 产物 |
-| `prisma-cli` | 单独安装 Prisma CLI，仅用于容器启动时执行迁移，与运行时依赖隔离 |
+| `prisma-cli` | 单独安装 Prisma CLI，仅用于容器启动时执行迁移，与运行时依赖隔离。Prisma 7 项目需把 prisma.config.* 同时拷进 prisma-cli 与 runner 两个 stage（模板有注释行，安装时按项目实际启用） |
 | `runner` | 最小生产运行时：拷 standalone 产物 + 必要资源 + entrypoint；按需装 sqlite3（容器内在线备份用） |
 
 **关键设计点**：

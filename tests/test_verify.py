@@ -412,6 +412,22 @@ class TestGitignoreAndTracking(unittest.TestCase):
         self.assertEqual(env["status"], "FAIL")
         self.assertIn("已被 git 跟踪", env["detail"])
 
+    def test_env_variant_tracked_in_subdir_fails(self):
+        """用例 7b（P1 回归钉）：config/.env.local 被子目录强制跟踪 →
+        env_not_tracked FAIL 且点名变体。旧实现 `git ls-files -- .env*` 的
+        pathspec 无斜杠不跨目录，匹配不到子目录变体而漏检；改全量
+        ls-files -z + basename 过滤后必须命中。"""
+        repo = build_project(self.root)
+        _write(os.path.join(repo, "config/.env.local"),
+               "API_KEY=dev-only\n")
+        git_commit(repo, message="track env variant",
+                   add=["config/.env.local"], force=True)
+        data, p = verify_json(repo)
+        self.assertEqual(p.returncode, 1)
+        env = check_by_id(data, "env_not_tracked")
+        self.assertEqual(env["status"], "FAIL")
+        self.assertIn(".env.local", env["detail"])
+
     def test_docs_private_tracked_fails(self):
         """用例 8（P0-2 回归钉）：docs/private/ 下文件被 git 跟踪
         → private_not_tracked FAIL（运维真实值入库即事故），exit 1。"""

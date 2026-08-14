@@ -5,7 +5,7 @@
 ## 仓库性质
 
 - 公开开源仓库（GitHub: `zedboot`），MIT 协议，Copyright (c) 2026 zouh9426。
-- 仓库内容：`zedboot/`（skill 本体：SKILL.md + references/ + assets/ + scripts/）、`tests/`（audit.py + verify.py + pre-push hook 测试，unittest，随 CI 运行）、双语文档（README / SETUP）、CHANGELOG、LICENSE、CI。
+- 仓库内容：`zedboot/`（skill 本体：SKILL.md + references/ + assets/ + scripts/）、`tests/`（audit.py + verify.py + pre-push hook + deploy 模板测试，unittest，随 CI 运行）、双语文档（README / SETUP）、CHANGELOG、LICENSE、CI。
 - 面向所有 AI 编码工具（Kimi Code / Claude Code / Codex 等），**不得偏向任何单一工具**：skill 内部不写死任何工具的安装路径，运行时按「环境探测」规则解析。
 
 ## 红线

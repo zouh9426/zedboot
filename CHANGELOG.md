@@ -2,6 +2,19 @@
 
 本项目所有值得记录的变更都写在这里。格式约定：每条目回答两个问题——**改了什么**、**为什么这么改（决策理由）**。
 
+## [0.8.1] - 2026-08-15
+
+外部前轮审查驱动的修复版（审查对象 v0.8.0；两项 P0 均经实测复现确认）。不加功能、不动 Docker 三档架构。
+
+- **Prisma Dockerfile 修复 v0.8.0 引入的构建回归（P0）**：v0.8.0 为兼容 Prisma 7 把 `COPY prisma ./prisma` 改成 `COPY prisma* ./`——Docker COPY 语义下目录 source 拷的是内容而非目录本身，通配多 source 时 prisma/ 内容被摊平进 /app 根，/app/prisma 不存在导致 runner 的 `COPY --from=prisma-cli /app/prisma` build fail；且 prisma.config.ts 也进不了 runner。恢复目录拷贝，两个 stage 各加一行注释掉的 prisma.config.* 可选拷贝（安装时按项目实际启用），deployment-guide §7.1 同步；test_deploy.py 新增两个结构断言用例防通配回归（本机/CI 无 Docker 构建环境，以模板结构断言替代 build smoke）。理由：修兼容性不能以破坏基础构建为代价。
+- **pre-push 去掉 --first-parent（P0）**：v0.8.0 为覆盖 merge 冲突解决引入的敏感行加了 `--first-parent -m`，但 --first-parent 令 git log 完全不遍历第二父代链——feature 分支"加私钥→删除→--no-ff 合回 main"后，侧分支历史中的私钥不在扫描范围，push 放行。两处扫描均删 --first-parent 保留 -m（merge 对双父各出一次 diff，存在性检查下重复无害）。新增回归用例：侧分支泄露后删除再 merge 必须拦（先红后绿实测）。理由：推送的是整段历史，不是主线净变化。
+- **pre-push 路径检查覆盖 rename（P1）**：`--diff-filter=A` 对 `git mv .env.example .env.production`（R100）无输出，rename 可绕过 .env* 路径拦截；改为 `ACR`（rename 检出无需显式 -M，--name-only 输出目标路径）。新增 rename 拦截回归用例（先红后绿）。
+- **tracked .env* 全量收口（P1）**：verify.py 的跟踪检查只对字面 `.env`、audit.py 的 pathspec `".env*"` 不跨目录（`config/.env.local` 漏检，且内容扫描又因 _is_env_file 跳过——双盲区）。两处统一改为 `git ls-files -z` 全量 + basename 过滤，任意子目录变体覆盖。verify/audit 各补子目录变体跟踪的回归用例。
+- **REMOTE_DIR 最后两处收口（P1）**：deployment.md.tmpl 服务器命令不再写死 `cd /opt/<项目名>`（指向 deploy.env 的 REMOTE_DIR）；backup-manifest.conf.tmpl 的 `ZB_SERVER_DIR` 改 `<REMOTE_DIR>` 占位。
+- **P2 尾巴清理**：init/adopt 工作流"闸门读 ops.md"旧口径改 deploy.env 真源表述；四处 `.env` 单数表述改 `.env*`（含两份管理规范同步）；tests 描述四处补 test_deploy.py；test_deploy.py 过期注释更新；静态站 Caddyfile 示例补 REMOTE_DIR 一致性注释。
+
+测试：86 → 92 个 unittest 用例全绿（新增 6 个）。
+
 ## [0.8.0] - 2026-08-14
 
 外部第五轮审查驱动的隐私链路补全 + 部署契约收敛。审查的两项 P0（.env* 变体、multi-remote 漏扫）均经 /tmp 实测复现确认后修复；pre-push 所有修复均先红后绿。

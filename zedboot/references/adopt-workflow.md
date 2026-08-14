@@ -24,7 +24,7 @@
 - 管理规范副本的版本对齐：`docs/project/PROJECT_RULES.md` 用 `references/project-rules-compact.md` 全文重拷对齐到当前版（项目本地增补需保留时提示人工合并）；若项目同时随装了完整参考版（`docs/reference/PROJECT_RULES_REFERENCE.md`），必须同步用 `references/project-rules-reference.md` 重拷——两份副本的版本号与署名保持一致，只更新精简版会留下旧版残留。顺带 grep 项目入库文件中的本 Skill 历史名称（旧名 ZeroWeave），命中即更新为当前名。
 - 部署体系：已有 Docker 但缺纪律 → 只补账号/rsync/备份与文档；已有全套异构部署 → 按 B 的用户裁决执行（迁移 or 仅文档对齐）；同时补生成 `docs/private/backup-manifest.conf` 与 `docs/private/deploy.env`（模板 `assets/project/deploy.env.tmpl`，部署五事实；已存在则跳过）。
 - UI：无 DESIGN.md → 自检 zedui 后调起其 Phase 0；有 DESIGN.md → 只登记不重定。
-- pre-push 隐私闸门（项目已启用 Git 时）：`.git/hooks/pre-push` 不存在则用 `assets/hooks/pre-push.tmpl` 安装（复制后 `chmod +x`，安装时把模板顶部的 `<项目名>` 替换为项目名（未替换时闸门自动降级））；服务器账号无需安装时配置（运行时读 `docs/private/ops.md`，见 `info-collection.md` 存储纪律三事实分离）；已存在则跳过并提示人工合并；装完按 init 第 1 步同款探测 `core.hooksPath`，非空且无法确认全局钩子会链式调用项目级钩子时，醒目警告用户并记入 PROJECT_STATE（同样用 `~/…` 相对表达，不写本机绝对路径）。
+- pre-push 隐私闸门（项目已启用 Git 时）：`.git/hooks/pre-push` 不存在则用 `assets/hooks/pre-push.tmpl` 安装（复制后 `chmod +x`，安装时把模板顶部的 `<项目名>` 替换为项目名（未替换时闸门自动降级））；服务器账号无需安装时配置（闸门运行时读 `docs/private/deploy.env` 的 `DEPLOY_USER`；`ops.md`「机器可读字段」为旧项目 fallback，见 `info-collection.md` 存储纪律三事实分离）；已存在则跳过并提示人工合并；装完按 init 第 1 步同款探测 `core.hooksPath`，非空且无法确认全局钩子会链式调用项目级钩子时，醒目警告用户并记入 PROJECT_STATE（同样用 `~/…` 相对表达，不写本机绝对路径）。
 - 已被 git 跟踪的 `.env` 等敏感文件（audit §3 会报）：`git rm --cached <文件>` 解除跟踪 + 确认 `.gitignore` 覆盖——`.gitignore` 不会解除已跟踪文件；并提醒用户：历史提交里仍有残留，彻底清理需历史重写（口径见 `info-collection.md`「转 Public 前置」），已泄露的密钥应同时轮换。
 - zedback 中央登记簿：同 init 第 4 步，把项目绝对路径追加进 `~/Documents/Backups/projects.index`（幂等）。
 - **绝不改动业务代码逻辑**；改造只动管理层、部署层、文档层。

@@ -6,6 +6,7 @@
 被测对象：
   1. deploy-rsync.sh.tmpl（容器栈：把项目代码从本地 rsync 直推服务器）
   2. static/deploy-rsync-static.sh.tmpl（静态站：只推发布目录，fail-closed）
+  3. nextjs/Dockerfile.tmpl 的 Prisma COPY 结构（纯文本断言，见文件尾 TestNextjsDockerfilePrismaCopy）
 
 fixture 风格与 test_pre_push.py 一致：把模板拷贝进临时项目目录，PATH 前置
 stub 的 rsync/ssh（只把参数记录到文件后 exit 0），以真实 `bash <脚本>` 运行，
@@ -22,8 +23,8 @@ IP 用 RFC 5737 文档示例段 192.0.2.1，密钥用 ~ 相对占位路径，不
     - 发布目录存在（默认 dist / 或 STATIC_OUTPUT_DIR=out）→ 只推该目录
     - STATIC_OUTPUT_DIR=. 或越出项目根的 ../x（目录存在）→ exit 1（越界防护）
     - 发布目录缺失 → exit 1（fail-closed）
-    注：静态脚本的 rsync 排除仍是现状的 `--exclude .env`（把静态脚本的排除也
-    扩为 .env* 的改动不在本任务范围，测试只按实际脚本内容断言，不越权改脚本）。
+    注：静态脚本的 rsync 排除同样是 `.env*` 全家族（覆盖 .env/.env.local 等，
+    与容器脚本一致）；测试只按实际脚本内容断言。
 
 纯 Python 3 标准库（unittest），兼容 3.8+。
 """
@@ -40,6 +41,8 @@ DEPLOY_RSYNC_TMPL = os.path.join(REPO_ROOT, "zedboot", "assets", "deploy",
 DEPLOY_RSYNC_STATIC_TMPL = os.path.join(REPO_ROOT, "zedboot", "assets",
                                         "deploy", "static",
                                         "deploy-rsync-static.sh.tmpl")
+NEXTJS_DOCKERFILE_TMPL = os.path.join(REPO_ROOT, "zedboot", "assets", "deploy",
+                                      "nextjs", "Dockerfile.tmpl")
 BASH_AVAILABLE = shutil.which("bash") is not None
 
 # 部署五事实（运行时写入 deploy.env；IP 为 RFC 5737 文档示例段，密钥为占位路径）
@@ -211,6 +214,32 @@ class TestDeployRsyncScripts(unittest.TestCase):
         self.assertIn("未找到发布目录", p.stderr)
         self.assertFalse(os.path.exists(self.log),
                          "目录缺失不应触发 rsync")
+
+
+# ---------------------------------------------------------------------------
+# nextjs Dockerfile.tmpl 的 Prisma COPY 结构（纯文本断言，不需要 docker）
+# ---------------------------------------------------------------------------
+class TestNextjsDockerfilePrismaCopy(unittest.TestCase):
+    """钉住 v0.8.0 修复后的 COPY 结构：prisma/ 目录整体拷入保持 /app/prisma，
+    禁止回退到 `COPY prisma*` 通配；prisma.config 的可选拷贝以注释行形式
+    同时存在于 prisma-cli 与 runner 两个 stage（防"config 进不了 runner"回归
+    以任何形式复活）。"""
+
+    @classmethod
+    def setUpClass(cls):
+        with open(NEXTJS_DOCKERFILE_TMPL, encoding="utf-8") as f:
+            cls.text = f.read()
+
+    def test_prisma_cli_uses_directory_copy_not_wildcard(self):
+        """prisma-cli stage：含 `COPY prisma ./prisma`，且不含 `COPY prisma*` 通配。"""
+        self.assertIn("COPY prisma ./prisma", self.text)
+        self.assertNotIn("COPY prisma*", self.text)
+
+    def test_runner_has_prisma_config_copy_guidance(self):
+        """runner stage：含 prisma.config 可选拷贝指引（注释行也算存在）。"""
+        self.assertIn("COPY --from=prisma-cli /app/prisma ./prisma", self.text)
+        self.assertIn("COPY --from=prisma-cli /app/prisma.config.ts "
+                      "./prisma.config.ts", self.text)
 
 
 if __name__ == "__main__":

@@ -27,6 +27,7 @@ Vite/Astro → `dist/`，Next.js 静态导出 → `out/`，纯 HTML → 建议 `
 
 ```
 <域名> {
+    # 路径与 deploy.env 的 REMOTE_DIR 一致
     root * /opt/<项目名>/dist
     file_server
     encode zstd gzip

@@ -12,7 +12,7 @@ zedboot 的「装后机械校验」工具，与 scripts/audit.py 的「装前只
   1. 管理文件齐备（init-workflow.md 第 1 步）
   2. 占位符替换干净（info-collection.md 存储纪律 / 填写约定）
   3. .gitignore 含 .env* / data/ / backups/ / docs/private/ 四项（条目存在 +
-     git check-ignore 生效语义双层判定，.env* 覆盖全部 .env 变体）；.env 与
+     git check-ignore 生效语义双层判定，.env* 覆盖全部 .env 变体）；.env* 与
      docs/private/ 未被 git 跟踪
      （init-workflow.md 第 1 步 Git 条目）
   4. pre-push 隐私闸门已安装且可执行（含 core.hooksPath 影响探测）
@@ -44,7 +44,7 @@ zedboot 的「装后机械校验」工具，与 scripts/audit.py 的「装前只
 ----------------------------------------------------------------------------------
 - 非 git 仓库 / git 不可用：无「入库文件」概念，占位符与私钥头检查降级为工作区
   文本扫描（跳过依赖/构建噪音目录与 docs/private/），无命中时标 WARN（扫描范围
-  不完整）而非 PASS，有命中仍 FAIL；.env 跟踪状态与 pre-push 钩子检查整体 SKIP。
+  不完整）而非 PASS，有命中仍 FAIL；.env* 跟踪状态与 pre-push 钩子检查整体 SKIP。
 - 嵌套仓库（目录自身无 .git、被外层仓库包含）：按非仓库处理，git 结论不可信。
 - 项目模式判定：读取 PROJECT_INDEX.md → PROJECT_STATE.md → AGENTS.md 的
   「项目模式」行；三处皆无/为空 → 部署产物检查 SKIP（不臆断），判定本身标 WARN。
@@ -527,25 +527,31 @@ def _check_private_not_tracked(root, git_status, git_note):
 
 
 def _check_env_tracked(root, git_status, git_note):
-    """3c. .env 未被 git 跟踪（git ls-files 判定，命令带超时）。"""
+    """3c. .env* 未被 git 跟踪（git ls-files -z 全量 + basename 过滤判定，命令带超时）。
+
+    git pathspec 无斜杠不跨目录（`git ls-files -- .env*` 匹配不到
+    config/.env.local 这类子目录变体），故取全部 tracked 文件后按 basename
+    用 _is_env_file() 过滤——.env、.env.local、任意子目录下的 .env* 变体
+    统一覆盖（与 audit.py 同口径）。"""
     if git_status != "repo":
-        return _mk("env_not_tracked", ".env 未被 git 跟踪", "SKIP",
+        return _mk("env_not_tracked", ".env* 未被 git 跟踪", "SKIP",
                    "非 git 仓库（%s），无法判定跟踪状态" % (git_note or "git 不可用"),
                    "git_privacy")
-    env = _find_file(root, ".env")
-    if env is None:
-        return _mk("env_not_tracked", ".env 未被 git 跟踪", "PASS",
-                   ".env 未创建（无跟踪风险）", "git_privacy")
-    ok, out, err, note = _run_git(root, ["ls-files", "--error-unmatch", "--", ".env"])
+    ok, out, _, note = _run_git(root, ["ls-files", "-z"])
     if note is not None:
-        return _mk("env_not_tracked", ".env 未被 git 跟踪", "WARN",
+        return _mk("env_not_tracked", ".env* 未被 git 跟踪", "WARN",
                    "git 命令失败，无法判定：%s" % note, "git_privacy")
-    if ok:
-        return _mk("env_not_tracked", ".env 未被 git 跟踪", "FAIL",
-                   ".env 已被 git 跟踪（敏感文件入库风险；adopt-workflow.md C 步 要求 "
-                   "git rm --cached + .gitignore 覆盖）", "git_privacy")
-    return _mk("env_not_tracked", ".env 未被 git 跟踪", "PASS",
-               ".env 存在但未被 git 跟踪", "git_privacy")
+    tracked = sorted({
+        os.path.basename(p) for p in out.split("\0")
+        if p and _is_env_file(os.path.basename(p))
+    })
+    if tracked:
+        return _mk("env_not_tracked", ".env* 未被 git 跟踪", "FAIL",
+                   ".env* 环境文件已被 git 跟踪（敏感文件入库风险；adopt-workflow.md "
+                   "C 步 要求 git rm --cached + .gitignore 覆盖）：%s"
+                   % "、".join(tracked), "git_privacy")
+    return _mk("env_not_tracked", ".env* 未被 git 跟踪", "PASS",
+               "无 .env* 环境文件被 git 跟踪", "git_privacy")
 
 
 def _check_pre_push_hook(root, git_status, git_note):
