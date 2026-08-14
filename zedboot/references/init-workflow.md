@@ -21,7 +21,7 @@
 
 ## 2. 装部署体系（可部署/混合项目）
 
-- 按技术栈选 `assets/deploy/` 模板落盘根目录（幂等：已存在的文件跳过不覆盖，防回滚人工修改；需更新时提示人工合并）：Dockerfile（nextjs/python/go 之一；不在库中按 `references/deployment-guide.md` §3 设计点现场编写。Go 栈：先检测项目实际 main package（如 `cmd/server`），与 Dockerfile 的 `GO_MAIN_PACKAGE` ARG 对齐——默认 `./cmd/server`，单 main package 项目用 `--build-arg GO_MAIN_PACKAGE=.` 覆盖）、`docker-compose.yml`、`docker-entrypoint.sh`（nextjs/python 栈；go 栈 ENTRYPOINT 烤进镜像、无此文件）、`backup.sh`、`deploy-rsync.sh`、`.dockerignore`（`dockerignore.tmpl`，**不可省**——防止 `COPY . .` 把 `.env*`/`data/` 拷进镜像）。
+- 按技术栈选 `assets/deploy/` 模板落盘根目录（幂等：已存在的文件跳过不覆盖，防回滚人工修改；需更新时提示人工合并）：Dockerfile（nextjs/python/go 之一；不在库中按 `references/deployment-guide.md` §3 设计点现场编写。Go 栈：先检测项目实际 main package（如 `cmd/server`），与 Dockerfile 的 `GO_MAIN_PACKAGE` ARG 对齐——默认 `./cmd/server`，单 main package 项目用 `--build-arg GO_MAIN_PACKAGE=.` 覆盖；go.mod/go.sum 需存在（无外部依赖的项目执行 `go mod tidy` 生成 go.sum，Dockerfile 的 `COPY go.mod go.sum` 依赖它））、`docker-compose.yml`、`docker-entrypoint.sh`（nextjs/python 栈；go 栈 ENTRYPOINT 烤进镜像、无此文件）、`backup.sh`、`deploy-rsync.sh`、`.dockerignore`（`dockerignore.tmpl`，**不可省**——防止 `COPY . .` 把 `.env*`/`data/` 拷进镜像）。
   - 静态站点：无应用容器，按 `assets/deploy/static/README.md`——本地构建、rsync 只推发布目录（`STATIC_OUTPUT_DIR`：Vite/Astro=`dist`、Next.js 静态导出=`out`、纯 HTML=`public`）、服务器共享 Caddy 直接伺服。**不装 backup.sh**（容器栈数据备份脚本；静态站无应用数据，其数据备份由 zedback 经 manifest 的 `ZB_PULLS` 拉取站点产物目录（如 `dist/`）承担，见 `assets/project/backup-manifest.conf.tmpl` 注释）。
   - 脚本落盘后统一 `chmod +x`（执行位兜底，防模板来源或拷贝方式丢位）：`docker-entrypoint.sh`（nextjs/python 栈；go 栈无此文件，跳过）、`backup.sh`、`deploy-rsync.sh`（静态站点为 `deploy-rsync-static.sh`）。
 - 生成 `docs/guides/deployment.md`（容器栈用 `assets/deploy/deployment.md.tmpl`，静态站点用 `assets/deploy/deployment-static.md.tmpl`；入库文件只写占位符，真实运维值按下条入 ops.md）。
@@ -30,6 +30,7 @@
 - 生成 `docs/private/backup-manifest.conf`（模板 `assets/project/backup-manifest.conf.tmpl`）：zedback 每日备份按它拉取服务器数据，字段含义见模板注释；无部署项目不生成；**首次部署完成后必须更新该清单**：`ZB_DEPLOYED` 翻为 true 并填实 `ZB_SSH_TARGET`/`ZB_SSH_KEY`/`ZB_SERVER_DIR`/`ZB_PULLS`（键名以模板注释为准，一律 ZB_ 前缀；部署动作与改卡是同一流程的一部分）。
 - 上线 Checklist（`assets/checklists/go-live-checklist.md`）登记为 TODO 任务；静态站点先按文件内「静态站点（无容器）替代说明」区块裁剪再登记，剔除永远完不成的 Docker 条目。
 - `.env.example` 只写键名入库；`.env` 永不入库（`.gitignore` 纪律见第 1 步的 Git 条目）。
+- **提交时序警示**：本步产物在首次发布前处于未提交状态——避免 `git reset --hard`/`git stash` 等回退操作，否则部署件会静默丢失。
 
 ## 3. 装 UI 体系（项目有界面时）
 

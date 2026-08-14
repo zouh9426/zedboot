@@ -2,6 +2,17 @@
 
 本项目所有值得记录的变更都写在这里。格式约定：每条目回答两个问题——**改了什么**、**为什么这么改（决策理由）**。
 
+## [0.8.2] - 2026-08-15
+
+多场景实测驱动的修复版（Python init / 纯 HTML 静态站 init / Go adopt 三条链路端到端实测，含部署模拟与 pre-push 实测）。实战结论：三条链路全通，发现的问题均为模板/文档级小项，无架构问题。
+
+- **模板与校验器打架三处修复**：TODO.md.tmpl / DECISION_LOG.md.tmpl 的"编号格式"说明行、backup.sh.tmpl 的注释示例自带尖括号中文占位符（`<项目代码>`/`<项目名>`），忠实落盘必触发 verify.py 占位符 FAIL——两个测试员独立踩中。改为示例式/英文占位写法（`XXX-001`、`<PROJECT_NAME>`），语义不变。理由：模板的第一要务是照做不翻车。
+- **deployment-static.md.tmpl 纯 HTML 文案补漏**：0.8.1 修了 static/README 与 checklist 的 npm run build 文案，独漏生成给项目日常读的 deployment.md（发布/恢复两处命令链）——纯 HTML 项目照抄必失败，已改"有构建步骤先构建、纯 HTML 直接执行"口径。理由：同一口径的修复必须覆盖所有落地文件，漏一个就等于没修。
+- **文档/模板小项十处**：AGENTS 模板悬空 bullet 删除；隐私指针从 skill 内部路径（装后悬空引用）改指项目内 docs/guides/deployment.md；deploy.env.tmpl 补 STATIC_OUTPUT_DIR 安装时填值指引（纯 HTML 首部署必踩 fail-closed 的预防）；info-collection 模式枚举补"静态站归入可部署代码项目"；init-workflow 补"部署件未提交前勿 git reset/stash"警示与 Go 栈 go.sum 前置说明；adopt-workflow 补"仅 git rm --cached 不重写历史时首次 push 必被拦"预告；deploy-rsync 尾行"自动迁移"标注适用范围；backup-manifest 注释说明 ZB_SSH_KEY 与 DEPLOY_KEY 同键不同形；backup-manifest 头部注释同步 zedback"纯数据解析、绝不 source"的消费方式（维护者先行改动，本版一并入库）。
+- **实战记录备查**（未修项与理由）：rsync 排除 `.env*` 连 `.env.example` 一起排（服务器不需要该模板，可接受的保守）；audit 对子目录 env 变体只报 basename（不影响处置）；模板"落盘时删除"的 HTML 注释若漏删会触发 verify FAIL（属预期——verify 替你抓到没删干净）。
+
+测试：97 个 unittest 用例全绿。
+
 ## [0.8.1] - 2026-08-15
 
 外部第六、七轮审查驱动的修复版（两项审查均先实测复现再修）。不加功能、不动 Docker 三档架构。

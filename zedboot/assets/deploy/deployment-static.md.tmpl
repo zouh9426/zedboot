@@ -34,7 +34,8 @@
   ```bash
   # 本地：构建后执行部署脚本，只推发布目录到服务器
   # 部署事实来自 docs/private/deploy.env（不入库），无需传环境变量
-  npm run build && ./deploy-rsync-static.sh
+  # 有构建步骤的项目先 npm run build；纯 HTML 直接执行
+  ./deploy-rsync-static.sh
   # 服务器：无需任何操作——共享 Caddy 直接伺服发布目录，rsync 完成即生效
   ```
 
@@ -42,7 +43,7 @@
 - **看日志**：无容器、无应用进程日志；Caddy 访问/错误日志在服务器（真实位置见 docs/private/ops.md）
 - **重启**：无容器、无服务进程，无需重启；改完发布目录重新 rsync 即更新
 - **备份**：静态站无应用数据，备份 = 仓库本身（已 push 私有 GitHub 仓库）+ 服务器发布目录；无 backup.sh 数据备份，建议将发布目录同步到对象存储做异地容灾（调度见 docs/private/ops.md）
-- **恢复**：仓库 clone + `npm run build` + 重新 rsync；或从服务器发布目录备份直接恢复
+- **恢复**：仓库 clone 后（有构建步骤的项目先 `npm run build`；纯 HTML 直接执行）重新跑 `./deploy-rsync-static.sh`；或从服务器发布目录备份直接恢复
 
 ## 3. 原理参考
 

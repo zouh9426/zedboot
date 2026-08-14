@@ -31,9 +31,8 @@
 
 ## 项目特有约束
 
-- 运维/部署真实值（服务器 IP、SSH 端口、密钥路径、crontab 调度等）统一存本地 `docs/private/`（已 gitignore，永不入库）：不可推导运维值存 `docs/private/ops.md`（人读参考），部署六事实另存 `docs/private/deploy.env`（机器读，部署脚本 source，见 `references/deployment-guide.md` §6）；入库文档只写占位符（如 `<PRODUCTION_SERVER_IP>`、`<DEPLOY_USER>`）+ 指向 `docs/private/` 的注记。
+- 运维/部署真实值（服务器 IP、SSH 端口、密钥路径、crontab 调度等）统一存本地 `docs/private/`（已 gitignore，永不入库）：不可推导运维值存 `docs/private/ops.md`（人读参考），部署六事实另存 `docs/private/deploy.env`（机器读，部署脚本 source，见 `docs/guides/deployment.md`）；入库文档只写占位符（如 `<PRODUCTION_SERVER_IP>`、`<DEPLOY_USER>`）+ 指向 `docs/private/` 的注记。
 - 禁止将密钥、密码、token、服务器 IP、本机绝对路径写入入库文件。
-- 
 
 ## 默认跳过
 

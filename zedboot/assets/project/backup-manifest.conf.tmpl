@@ -1,6 +1,8 @@
 # backup-manifest.conf — zedback 每日备份登记清单（由 zedboot 开局/改造时生成）
 # 本文件含服务器真实值（IP/账号/密钥路径），必须留在 docs/private/（已 gitignore），永不入库。
-# zedback 每日备份时 source 本文件；键名一律 ZB_ 前缀，请勿改动键名。
+# zedback 每日备份时按纯数据解析本文件（逐行读 ZB_ 白名单键，绝不 source/执行），
+# 支持 KEY=value / KEY="value" / KEY='value' 三种写法与行内注释（引号外的 # 起算注释）；
+# 键名一律 ZB_ 前缀，请勿改动键名。
 ZB_DISPLAY_NAME="<项目名>"              # 备份包内 项目/ 下的目录名
 ZB_GITHUB_REPO="<GitHub仓库名>"         # 无公开仓库留空 ""
 ZB_DEPLOYED=false                      # 已部署到服务器=true；有部署配置但未上线=false
@@ -9,7 +11,7 @@ ZB_DEPLOYED=false                      # 已部署到服务器=true；有部署�
 ZB_SSH_TARGET="<DEPLOY_USER>@<PRODUCTION_SERVER_IP>"   # 或 ~/.ssh/config 里的别名
 #   ⚠️ SSH 端口非 22 时，zedback 侧拉取也需对应配置（如 ~/.ssh/config 为该主机配 Port）；
 #   zedback 协议本身不改，此处仅注记。
-ZB_SSH_KEY="<DEPLOY_KEY>"              # 私钥文件名（相对 ~/.ssh），灾难恢复随包携带，必填
+ZB_SSH_KEY="<DEPLOY_KEY>"              # 私钥文件名（相对 ~/.ssh），灾难恢复随包携带，必填；与 deploy.env 的 DEPLOY_KEY（全路径）指向同一把密钥，表示形式不同
 ZB_SERVER_DIR="<REMOTE_DIR>"           # 填 deploy.env 中 REMOTE_DIR 的实际值
 #   ⚠️ 分栈填写（zedback 直拼 $ZB_SERVER_DIR/$item，配错会拼出重复路径）：
 #   · 容器栈：ZB_SERVER_DIR = deploy.env 的 REMOTE_DIR（如 /opt/<项目名>），

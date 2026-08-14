@@ -37,4 +37,4 @@ rsync -az --delete \
   "${PROJECT_DIR}/" "${DEPLOY_USER}@${SERVER_IP}:${REMOTE_DIR}/"
 
 echo "[deploy] 代码已同步。请在服务器执行："
-echo "  cd ${REMOTE_DIR} && docker compose up -d --build   # 启动时自动迁移"
+echo "  cd ${REMOTE_DIR} && docker compose up -d --build   # 启动时自动迁移（有数据库迁移的项目）"
