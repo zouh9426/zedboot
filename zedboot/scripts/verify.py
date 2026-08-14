@@ -11,7 +11,8 @@ zedboot 的「装后机械校验」工具，与 scripts/audit.py 的「装前只
 逐项机械核对安装承诺是否兑现：
   1. 管理文件齐备（init-workflow.md 第 1 步）
   2. 占位符替换干净（info-collection.md 存储纪律 / 填写约定）
-  3. .gitignore 含 .env 条目；.env 未被 git 跟踪（init-workflow.md 第 1 步 Git 条目）
+  3. .gitignore 含 .env / data/ / backups/ / docs/private/ 四项；.env 与
+     docs/private/ 未被 git 跟踪（init-workflow.md 第 1 步 Git 条目）
   4. pre-push 隐私闸门已安装且可执行（含 core.hooksPath 影响探测）
   5. 部署产物（仅可部署项目；init-workflow.md 第 2 步）
   6. 入库文件私钥格式头快扫（SKILL.md 硬性规则 3 秘密边界）
@@ -252,7 +253,11 @@ def _tracked_files(root):
 def _scan_committed_text(root, git_status, git_note, tracked):
     """单次扫描入库/工作区文本文件，收集「中文占位符残留」与「私钥格式头」命中。
 
-    git 仓库：扫 git 跟踪的文件（跳过 .env 与 .gitignore，口径同 audit.py）。
+    git 仓库：扫「下次 commit 会进去的全部文件」= 已跟踪 + 未跟踪但未被
+    gitignore 排除（`git ls-files -co --exclude-standard`）——zedboot 流程里
+    verify 跑在装后 commit 之前，init 第 2/3 步与 adopt C 步新落盘的文件此时
+    很可能尚未 git add，只扫已跟踪会漏掉最该查的一批（跳过 .env 与
+    .gitignore，口径同 audit.py）。
     非仓库/嵌套/git 不可用：无入库文件概念，降级扫描工作区文本文件
     （跳过依赖/构建噪音目录与 docs/private/——后者按 SKILL.md 契约永不入库），
     无命中标 WARN（扫描范围不完整）而非 PASS，有命中仍 FAIL。
@@ -261,7 +266,7 @@ def _scan_committed_text(root, git_status, git_note, tracked):
       scope              'tracked' | 'workspace_degraded'
       note               降级原因说明（tracked 时为 None）
       scanned_count      实际扫描文本文件数
-      untracked_count    仓库中未跟踪文件数（提示 git add 前自查）
+      untracked_count    扫描范围内未跟踪（且未被忽略）的文件数
       truncated          超过 2MB 仅扫头部的文件列表
       placeholder_hits   {rel: [(行号, 命中文本), ...]}
       key_hits           {rel: [行号, ...]}
@@ -278,11 +283,18 @@ def _scan_committed_text(root, git_status, git_note, tracked):
 
     if git_status == "repo" and tracked is not None:
         ok, out, err, note = _run_git(
-            root, ["ls-files", "--others", "--exclude-standard"])
-        if ok:
+            root, ["ls-files", "-co", "--exclude-standard"])
+        if note is None and ok:
+            all_files = [l.strip() for l in out.splitlines() if l.strip()]
+            tracked_set = set(tracked)
             result["untracked_count"] = len(
-                [l for l in out.splitlines() if l.strip()])
-        files = [(rel, os.path.join(root, rel)) for rel in tracked]
+                [f for f in all_files if f not in tracked_set])
+            files = [(rel, os.path.join(root, rel)) for rel in all_files]
+        else:
+            # 命令失败时回退为仅已跟踪，不臆断
+            result["note"] = ("ls-files -co 失败，回退为仅扫描已跟踪文件"
+                              "（未跟踪文件未纳入）")
+            files = [(rel, os.path.join(root, rel)) for rel in tracked]
     else:
         result["scope"] = "workspace_degraded"
         if git_status == "not_repo":
@@ -383,39 +395,75 @@ def _check_placeholder(scan):
                % scan["scanned_count"], "placeholder")
 
 
-def _gitignore_matches_env(pattern):
-    """gitignore 行是否构成对 .env 的忽略规则（SKILL.md 要求 .gitignore 含 .env）。"""
+def _gitignore_covers(pattern, target):
+    """gitignore 行是否覆盖 target（target 如 .env / data / backups / docs/private）。
+
+    语义：无斜杠的模式匹配任意层级同名项；含斜杠的模式锚定仓库根比较全路径。
+    （init-workflow.md 第 1 步要求 .gitignore 含 .env、data/、backups/、
+    docs/private/ 四项。）"""
     p = pattern.strip()
-    if not p or p.startswith("#"):
+    if not p or p.startswith("#") or p.startswith("!"):
         return False
-    if p == ".env":
-        return True
+    p = p.lstrip("/").rstrip("/")
     if p.startswith("**/"):
         p = p[3:]
-    if p == ".env":
-        return True
-    if p.startswith(".env/") or p.startswith(".env*") or p.endswith("/.env"):
-        return True
-    return False
+    if not p:
+        return False
+    if target == ".env":
+        return p == ".env" or p.startswith(".env*")
+    if "/" in p:
+        return p == target
+    return p == target.rsplit("/", 1)[-1]
 
 
-def _check_gitignore_env(root):
-    """3a. .gitignore 含 .env 条目。"""
+# .gitignore 必须覆盖的四项（init-workflow.md 第 1 步 Git 条目）
+GITIGNORE_REQUIRED = (".env", "data", "backups", "docs/private")
+
+
+def _check_gitignore_rules(root):
+    """3a. .gitignore 含 .env / data/ / backups/ / docs/private/ 四项。"""
     gi = _find_file(root, ".gitignore")
     if gi is None:
-        return _mk("gitignore_env", ".gitignore 含 .env 条目", "FAIL",
-                   ".gitignore 不存在", "git_privacy")
+        return [_mk("gitignore_rules", ".gitignore 必含四项", "FAIL",
+                    ".gitignore 不存在（要求含 %s）"
+                    % "、".join(GITIGNORE_REQUIRED), "git_privacy")]
     text = _read_text(os.path.join(root, gi))
     if text is None:
-        return _mk("gitignore_env", ".gitignore 含 .env 条目", "WARN",
-                   ".gitignore 非 UTF-8 或不可读，无法确认 .env 条目", "git_privacy")
-    for line in text.splitlines():
-        if _gitignore_matches_env(line):
-            return _mk("gitignore_env", ".gitignore 含 .env 条目", "PASS",
-                       "找到 .env 条目", "git_privacy")
-    return _mk("gitignore_env", ".gitignore 含 .env 条目", "FAIL",
-               "未找到 .env 条目（init-workflow.md：.gitignore 必须含 .env、data/、"
-               "backups/、docs/private/）", "git_privacy")
+        return [_mk("gitignore_rules", ".gitignore 必含四项", "WARN",
+                    ".gitignore 非 UTF-8 或不可读，无法确认忽略条目", "git_privacy")]
+    lines = text.splitlines()
+    checks = []
+    for target in GITIGNORE_REQUIRED:
+        label = target if target == ".env" else target + "/"
+        if any(_gitignore_covers(line, target) for line in lines):
+            checks.append(_mk("gitignore:" + target, ".gitignore 含 %s 条目" % label,
+                              "PASS", "找到条目", "git_privacy"))
+        else:
+            checks.append(_mk("gitignore:" + target, ".gitignore 含 %s 条目" % label,
+                              "FAIL", "未找到 %s 条目" % label, "git_privacy"))
+    return checks
+
+
+def _check_private_not_tracked(root, git_status, git_note):
+    """3c. docs/private/ 未被 git 跟踪（ops.md / backup-manifest.conf 含运维真实值，
+    跟踪即泄露事故；git ls-files 判定，命令带超时）。"""
+    if git_status != "repo":
+        return _mk("private_not_tracked", "docs/private/ 未被 git 跟踪", "SKIP",
+                   "非 git 仓库（%s），无法判定跟踪状态" % (git_note or "git 不可用"),
+                   "git_privacy")
+    ok, out, err, note = _run_git(
+        root, ["ls-files", "--", "docs/private"])
+    if note is not None or not ok:
+        return _mk("private_not_tracked", "docs/private/ 未被 git 跟踪", "WARN",
+                   "git 命令失败，无法判定：%s" % (note or err), "git_privacy")
+    hits = [l.strip() for l in out.splitlines() if l.strip()]
+    if hits:
+        return _mk("private_not_tracked", "docs/private/ 未被 git 跟踪", "FAIL",
+                   "docs/private/ 下 %d 个文件已被 git 跟踪（运维真实值入库风险；"
+                   "adopt-workflow.md C 步要求 git rm --cached + .gitignore 覆盖）：%s"
+                   % (len(hits), "、".join(hits[:5])), "git_privacy")
+    return _mk("private_not_tracked", "docs/private/ 未被 git 跟踪", "PASS",
+               "docs/private/ 无被跟踪文件", "git_privacy")
 
 
 def _check_env_tracked(root, git_status, git_note):
@@ -713,9 +761,9 @@ def _mode_label(mode_info):
 
 def _scan_label(scan):
     if scan["scope"] == "tracked":
-        base = "git 跟踪文本文件 %d 个" % scan["scanned_count"]
+        base = "扫描文本文件 %d 个（已跟踪 + 未跟踪且未被忽略）" % scan["scanned_count"]
         if scan["untracked_count"]:
-            base += "（另有 %d 个未跟踪文件未纳入扫描，git add 前请自查）" \
+            base += "（其中 %d 个未跟踪、未被忽略的文件已纳入扫描）" \
                     % scan["untracked_count"]
         return base
     return "%s；工作区降级扫描文本文件 %d 个" % (scan["note"],
@@ -832,8 +880,9 @@ def main(argv=None):
     checks = []
     checks.extend(_check_management_docs(root))
     checks.append(_check_placeholder(scan))
-    checks.append(_check_gitignore_env(root))
+    checks.extend(_check_gitignore_rules(root))
     checks.append(_check_env_tracked(root, git_status, git_note))
+    checks.append(_check_private_not_tracked(root, git_status, git_note))
     checks.append(_check_pre_push_hook(root, git_status, git_note))
     checks.extend(_build_deploy_checks(root, mode_info))
     checks.append(_check_privacy(scan))

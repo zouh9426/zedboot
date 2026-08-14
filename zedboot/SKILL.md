@@ -1,6 +1,7 @@
 ---
 name: zedboot
 description: 项目开局编排器。从零创建项目时一次性装好三套体系——项目管理体系（管理五件套 + 工作规则）、部署体系（Docker + rsync 直推 + 私有 Git 仓库备份）、UI 体系（调起 zedui 生成 DESIGN.md）；也用于把缺体系的旧项目改造成"从一开始就装好"的状态（审计 → 差距方案 → 幂等安装）。本 Skill 只在开局/改造时运行一次，装完即退场，日常约束由装进项目的文件承担。Use when the user explicitly asks to initialize a new project with zedboot, bootstrap project management / deployment / UI systems, or retrofit an existing project that lacks these systems. Do not invoke merely because the user is starting a new coding project.
+compatibility: Requires Python 3.8+ and Git. Deployment workflows assume a Unix-like shell with SSH, rsync and Docker on the server side; UI integration optionally requires the zedui skill.
 ---
 
 # zedboot — 项目开局编排器

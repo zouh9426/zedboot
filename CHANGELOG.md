@@ -2,6 +2,15 @@
 
 本项目所有值得记录的变更都写在这里。格式约定：每条目回答两个问题——**改了什么**、**为什么这么改（决策理由）**。
 
+## [0.6.1] - 2026-08-14
+
+外部复检驱动的 verify.py 覆盖缺口修复 + 回归测试补齐。
+
+- **verify.py 扫描范围扩为「已跟踪 + 未跟踪但未被忽略」**：此前只扫 `git ls-files` 的已跟踪文件，未跟踪文件仅计数不扫描；但 zedboot 流程里 verify 跑在装后 commit 之前（init 第 1 步首次 commit，第 2/3 步才落盘部署文件，第 4 步 verify），新落盘的 Dockerfile/deployment.md 等若尚未 add 就恰好漏出占位符与私钥扫描。改为 `git ls-files -co --exclude-standard`（下次 commit 会进去的全部文件），命令失败回退仅扫已跟踪并注明，不臆断。理由：外部复检指出的真实路径漏洞——0.6.0 自测能抓到漏填是因为每步都 commit 了，不换路径就漏。
+- **.gitignore 校验从一项扩为四项 + docs/private 跟踪检查**：此前只验证 `.env` 条目，现在 `.env`/`data`/`backups`/`docs/private` 逐项 PASS/FAIL（gitignore 语义匹配：无斜杠模式匹配任意层级、含斜杠锚定根）；新增 `docs/private/` 被 git 跟踪即 FAIL（ops.md / backup-manifest.conf 含服务器 IP 与账号，是整个隐私隔离体系的核心，跟踪即泄露事故）。理由：规则写了四项、verifier 只验一项——校验器必须覆盖规则全文。
+- **新增 `tests/test_verify.py`**：verify.py 的回归测试（动态 fixture：装全容器栈 PASS、缺文件 FAIL、已提交/未跟踪占位符 FAIL、被忽略文件不误伤、gitignore 缺项 FAIL、.env 与 docs/private 被跟踪 FAIL、闸门缺失/不可执行 FAIL、core.hooksPath WARN、静态站与 go 栈分支、无部署 SKIP、--json 合法性、只读性快照），把本轮两个修复钉成 regression test。理由：verify.py 已是核心验收程序，不能自身零测试。
+- **frontmatter 增加 `compatibility` 字段**（Agent Skills 规范可选字段）：声明 Python 3.8+ / Git 必需，部署工作流假定 Unix-like shell + SSH/rsync/Docker，UI 支线可选依赖 zedui；tests.yml 步骤名同步为双脚本套件。理由：「工具无关」指 Agent client 无关，运行环境要求应如实声明。
+
 ## [0.6.0] - 2026-08-14
 
 外部工程化审核驱动的集中升级：秘密边界补对话上下文层、SKILL.md 回归控制器形态、装后校验程序化、测试资产入库。工作流语义不变（逐字搬迁 + 指针替换），无流程改动。
