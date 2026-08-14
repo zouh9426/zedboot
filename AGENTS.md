@@ -5,7 +5,7 @@
 ## 仓库性质
 
 - 公开开源仓库（GitHub: `zedboot`），MIT 协议，Copyright (c) 2026 zouh9426。
-- 仓库内容：`zedboot/`（skill 本体：SKILL.md + references/ + assets/ + scripts/）、双语文档（README / SETUP）、CHANGELOG、LICENSE、CI。
+- 仓库内容：`zedboot/`（skill 本体：SKILL.md + references/ + assets/ + scripts/）、`tests/`（audit.py fixture 测试矩阵，unittest，随 CI 运行）、双语文档（README / SETUP）、CHANGELOG、LICENSE、CI。
 - 面向所有 AI 编码工具（Kimi Code / Claude Code / Codex 等），**不得偏向任何单一工具**：skill 内部不写死任何工具的安装路径，运行时按「环境探测」规则解析。
 
 ## 红线
@@ -24,7 +24,7 @@
 3. **双语文档同步**：README.md ↔ README.en.md、SETUP.md ↔ SETUP.en.md，改了一边另一边必须在同一次迭代里跟上。中文是主门面，英文版跟随。
 4. **规范一致性**：`references/` 两份管理规范版本号必须一致，强制规则以精简版为准；`assets/` 模板改动后，检查 `SKILL.md` 的文件索引与流程描述是否仍然成立。
 5. **工作流改动要克制**：SKILL.md 的两条工作流经过多场景实测，改动需在 CHANGELOG 里写明实测依据，不凭感觉改。
-6. **收尾自检**：每次迭代收尾按项目模板同款五维自检执行（安全红线 grep / 交叉引用一致性 / 失效残留清理 / 脚本 `bash -n` 与 audit.py 冒烟 / CHANGELOG 同步），修复后复跑机械检查 + 纵览完整 diff；发版本前加查：README 双语同步、references 两份规范版本号一致、CI 绿。
+6. **收尾自检**：每次迭代收尾按项目模板同款五维自检执行（安全红线 grep / 交叉引用一致性 / 失效残留清理 / 脚本 `bash -n` 与 audit.py、verify.py 冒烟 / `python3 -m unittest discover -s tests` / CHANGELOG 同步），修复后复跑机械检查 + 纵览完整 diff；发版本前加查：README 双语同步、references 两份规范版本号一致、CI 绿。
 7. **zedback 联动纪律**：涉及开局/改造/部署流程的改动，必须保持两条契约成立——①项目路径以追加式（幂等）写进 zedback 中央登记簿 `~/Documents/Backups/projects.index`，绝不覆盖重写；②首次部署流程必须同步更新项目 `docs/private/backup-manifest.conf`（DEPLOYED=true + 服务器字段）。破坏任一契约即视为流程缺陷，需在同次改动中修复。
 
 ## 真源纪律（维护者本机备忘）

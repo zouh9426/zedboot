@@ -949,8 +949,8 @@ _OPS_SERVER_ACCOUNT_RE = re.compile(
 def _server_accounts_from_ops(root):
     """从项目根 docs/private/ops.md「机器可读字段」节提取「服务器账号」值。
 
-    服务器账号是第三个独立事实（仓库目录名 ≠ 项目名 ≠ 服务器账号，见 SKILL.md
-    存储纪律「三事实分离」），登记在 ops.md 一次，pre-push 闸门与 audit.py 各自读取。
+    服务器账号是第三个独立事实（仓库目录名 ≠ 项目名 ≠ 服务器账号，见
+    references/info-collection.md 存储纪律「三事实分离」），登记在 ops.md 一次，pre-push 闸门与 audit.py 各自读取。
     占位符（含 < >）不入放行集合；ops.md 缺失 / 不可读 / 无该键返回空列表。
     """
     rel = _find_file(root, "docs", "private", "ops.md")
@@ -1088,7 +1088,7 @@ def detect_committed_secrets(root):
     pn = _project_name_from_agents(root)
     if pn:
         home_allow.add(pn)
-    # 服务器账号（第三独立事实，见存储纪律三事实分离）：ops.md「机器可读字段」登记
+    # 服务器账号（第三独立事实，见 info-collection.md 存储纪律三事实分离）：ops.md「机器可读字段」登记
     for acc in _server_accounts_from_ops(root):
         home_allow.add(acc)
 

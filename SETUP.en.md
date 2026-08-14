@@ -40,7 +40,8 @@ Run these in order (use the actual paths resolved in steps 2/3):
 
 1. Read `<zedboot>/SKILL.md` and confirm the frontmatter parses (`name:` and `description:` present).
 2. `python3 <zedboot>/scripts/audit.py --help` — should print usage; then run it once against a real directory — should print a structured audit report, not an error.
+3. `python3 <zedboot>/scripts/verify.py --help` — should print usage.
 
-When both pass, report to me: the zedboot install path, the zedui detection result, and one confirmation line — "zedboot is installed; say 'Initialize this project from scratch with zedboot' or 'Retrofit this old project with zedboot' in your project to begin."
+When all three pass, report to me: the zedboot install path, the zedui detection result, and one confirmation line — "zedboot is installed; say 'Initialize this project from scratch with zedboot' or 'Retrofit this old project with zedboot' in your project to begin."
 
 ---

@@ -27,10 +27,10 @@ adopt (retrofit):    read-only audit → gap report → adoption plan (your call
 
 ## Key design decisions
 
-- **Runs once, then exits**: the skill only runs at bootstrap/retrofit time; ongoing discipline lives in the installed `AGENTS.md` + five-piece documents — no daily token overhead.
-- **Info collected once, up front**: six groups (identity, GitHub, server, domain, app secrets, backup policy) are asked once; any group may be deferred ("TBD"), which creates tracked TODOs instead of blocking. **Privacy line**: derivable values (account = project name, `/opt/<project>` paths) land in `PROJECT_INDEX.md` and the deployment doc; non-derivable ops values (IP / SSH port / key paths / crontab schedule) live only in local `docs/private/ops.md` (gitignored, never committed) while committed docs carry placeholders — a project can go public anytime without leaking its infrastructure fingerprint. **Secrets themselves never enter the repo** — only locations and references.
+- **Runs once, then exits**: the skill only runs at bootstrap/retrofit time; ongoing discipline lives in the installed `AGENTS.md` + five-piece documents. Reading is tiered: each task only must-reads small files (`AGENTS.md` / `PROJECT_STATE` / `TODO`, ~6 KB total), while the heavy rulebooks (PROJECT_RULES etc.) load only when triggered — daily token overhead stays modest.
+- **Info collected once, up front**: six groups (identity, GitHub, server, domain, app secrets, backup policy) are asked once; any group may be deferred ("TBD"), which creates tracked TODOs instead of blocking. **Privacy line**: derivable values (account = project name, `/opt/<project>` paths) land in `PROJECT_INDEX.md` and the deployment doc; non-derivable ops values (IP / SSH port / key paths / crontab schedule) live only in local `docs/private/ops.md` (gitignored, never committed) while committed docs carry placeholders — a project can go public anytime without leaking its infrastructure fingerprint. **Secrets themselves never enter the repo — nor the chat context**: only key names are asked, never values; users write values into `.env` themselves, and only locations and references are recorded.
 - **Idempotent install**: every adopt action is "check → merge/archive if present → create if missing"; safe to run twice, safe to do in stages; business code is never touched.
-- **Mechanical audit**: `scripts/audit.py` (stdlib-only, read-only) does the mechanical probing; anything undetectable is marked `unknown` for the AI to judge — no guessing.
+- **Mechanical audit**: `scripts/audit.py` (stdlib-only, read-only) does the mechanical probing; anything undetectable is marked `unknown` for the AI to judge — no guessing. After install, `scripts/verify.py` (same philosophy) mechanically checks the install promises — files present, placeholders replaced, `.env` untracked, gate in place — and exits 1 on any FAIL.
 - **Git discipline**: one private repo per project; local commits as usual, pushes bound to releases/deliveries only; tags are created after deployment and live verification.
 - **No UI overreach**: the UI track is delegated to zedui; if it is missing, zedboot says so and pauses only that track.
 
@@ -58,13 +58,15 @@ Once installed, say something like this to your AI in your project:
 
 ```
 zedboot/                    ← the skill itself (this is what you copy)
-├── SKILL.md                  ← orchestration: mode detection, info collection, two workflows
-├── references/               ← rulebooks (management rules compact/reference, deployment guide)
+├── SKILL.md                  ← controller: mode detection, dependency checks, hard rules (details load from references/ on demand)
+├── references/               ← rulebooks + workflow details (info collection/init/adopt, management rules ×2, deployment guide)
 ├── assets/
 │   ├── project/              ← project file templates (AGENTS/README/five-piece set, etc.)
 │   ├── deploy/               ← four stack templates (Next.js/Python/Go/static) + shared parts
-│   └── checklists/           ← go-live checklist, audit report, adoption plan templates
-└── scripts/audit.py          ← read-only auditor for existing projects (stdlib only)
+│   ├── checklists/           ← go-live checklist, audit report, adoption plan templates
+│   └── hooks/                ← pre-push privacy gate template
+└── scripts/                  ← audit.py (pre-install read-only audit) + verify.py (post-install mechanical checks, both stdlib-only)
+tests/                        ← audit.py fixture test matrix (unittest, runs in CI)
 README.md / README.en.md      ← Chinese/English front doors
 SETUP.md / SETUP.en.md        ← guided-install prompts (paste to your AI)
 CHANGELOG.md                  ← changes with decision rationale

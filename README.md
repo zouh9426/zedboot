@@ -25,10 +25,10 @@ adopt（旧项目改造）：只读审计 → 差距报告 → 改造方案（�
 
 ## 核心设计决策
 
-- **装完即退场**：skill 只在开局/改造时运行一次；日常约束全靠装进项目的 `AGENTS.md` + 管理五件套，不增加日常 token 负担。
-- **信息采集一次要齐**：项目身份、GitHub、服务器、域名、应用密钥、备份策略六组信息开局一次问清；任何一组可答"待定"，自动生成 TODO 不阻塞流程。**隐私线**：可推导值（账号 = 项目名、`/opt/<项目名>` 目录）落进 `PROJECT_INDEX.md` 外部资源表与部署文档；不可推导运维真实值（IP/SSH 端口/密钥路径/crontab 调度）只存本地 `docs/private/ops.md`（gitignore，永不入库），入库文档只写占位符——项目随时可转 Public 不泄露基础设施指纹。**秘密本体（私钥/密码/token）永不入库**，只登记位置与引用。
+- **装完即退场**：skill 只在开局/改造时运行一次；日常约束全靠装进项目的 `AGENTS.md` + 管理五件套。日常阅读分层加载：每次任务只必读 `AGENTS.md`/`PROJECT_STATE`/`TODO` 等小文件（合计约 6 KB），规范大部头（PROJECT_RULES 等）按触发条件才读，日常 token 开销可控。
+- **信息采集一次要齐**：项目身份、GitHub、服务器、域名、应用密钥、备份策略六组信息开局一次问清；任何一组可答"待定"，自动生成 TODO 不阻塞流程。**隐私线**：可推导值（账号 = 项目名、`/opt/<项目名>` 目录）落进 `PROJECT_INDEX.md` 外部资源表与部署文档；不可推导运维真实值（IP/SSH 端口/密钥路径/crontab 调度）只存本地 `docs/private/ops.md`（gitignore，永不入库），入库文档只写占位符——项目随时可转 Public 不泄露基础设施指纹。**秘密本体（私钥/密码/token）永不入库，也不进对话上下文**——采集只问键名不问值，值由用户自行落盘，只登记位置与引用。
 - **幂等安装**：adopt 的每个动作都是"检查 → 存在则合并/归档 → 不存在则创建"，跑两遍不出事，允许分次改造；不动业务代码。
-- **审计机械化**：`scripts/audit.py`（纯标准库、只读）做机械探测，探测不到的标 `unknown` 交 AI 判断，不硬猜。
+- **审计机械化**：`scripts/audit.py`（纯标准库、只读）做机械探测，探测不到的标 `unknown` 交 AI 判断，不硬猜；装完后 `scripts/verify.py`（同口径）机械校验安装承诺——文件齐备、占位符替换干净、`.env` 未跟踪、闸门就位，有 FAIL 即 exit 1。
 - **Git 纪律**：每项目一个独立私有仓库；本地 commit 照常，push 只与发布/交付绑定；Git Tag 在部署和线上验证之后打。
 - **UI 规范不越权**：UI 支线委托给 zedui；未安装时明确提示并暂停 UI 支线，其余体系照常。
 
@@ -56,13 +56,15 @@ init 会先一次性问齐六组信息（可答"待定"）；adopt 会先只读�
 
 ```
 zedboot/                    ← skill 本体（拷进技能目录的就是它）
-├── SKILL.md                  ← 编排逻辑：模式判断、信息采集、两条工作流
-├── references/               ← 规范正文（管理规范精简版/完整参考版、部署规范）
+├── SKILL.md                  ← 控制器：模式判断、依赖自检、硬性规则（细则按需加载 references/）
+├── references/               ← 规范正文 + 工作流细则（信息采集/init/adopt、管理规范两版、部署规范）
 ├── assets/
 │   ├── project/              ← 项目文件模板（AGENTS/README/五件套等）
 │   ├── deploy/               ← 四栈部署模板（Next.js/Python/Go/静态站）+ 通用件
-│   └── checklists/           ← 上线 Checklist、审计报告、改造方案模板
-└── scripts/audit.py          ← 旧项目只读审计工具（纯标准库）
+│   ├── checklists/           ← 上线 Checklist、审计报告、改造方案模板
+│   └── hooks/                ← pre-push 隐私闸门模板
+└── scripts/                  ← audit.py（装前只读审计）+ verify.py（装后机械校验，均纯标准库）
+tests/                        ← audit.py fixture 测试矩阵（unittest，随 CI 运行）
 README.md / README.en.md      ← 中英双门面
 SETUP.md / SETUP.en.md        ← 安装引导提示词（贴给你的 AI 即可）
 CHANGELOG.md                  ← 更新与决策日志

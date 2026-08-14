@@ -2,6 +2,19 @@
 
 本项目所有值得记录的变更都写在这里。格式约定：每条目回答两个问题——**改了什么**、**为什么这么改（决策理由）**。
 
+## [0.6.0] - 2026-08-14
+
+外部工程化审核驱动的集中升级：秘密边界补对话上下文层、SKILL.md 回归控制器形态、装后校验程序化、测试资产入库。工作流语义不变（逐字搬迁 + 指针替换），无流程改动。
+
+- **秘密边界扩展到对话上下文**：Phase 0.E 改为「只向用户问键名，绝不让用户把 key 值贴进对话」，现场生成的密钥用命令直接写入 `.env` 不回显；存储纪律第 3 条与硬性规则第 3 条同步补「秘密本体不进对话上下文」；README 双语同步。理由：外部审核发现原隐私线只防「入库」不防「进聊天上下文」——用户按旧指引把第三方 key 贴进对话即进入模型上下文与会话历史，泄露面多一层且无法收回。
+- **description 触发范围收紧**：英文触发尾句由「starting a new project from scratch」改为「用户明确要求用 zedboot 初始化/改造」并加反向约束（用户只是要开个新编码项目时不触发）。理由：description 是 Agent 自动选 Skill 的主要依据，原措辞会在「帮我做个 Todo App」这类场景泛触发一个会写十几个文件、建仓库的重型 Skill。
+- **SKILL.md 瘦身，回归控制器形态**（23394 B → 8669 B）：Phase 0 采集细则、init/adopt 两 workflow 的逐步细则逐字迁出至 `references/info-collection.md`、`references/init-workflow.md`、`references/adopt-workflow.md`（仅交叉引用改写为文件名指针，规则文字零改动）；SKILL.md 保留模式判断、环境探测、依赖自检、六组信息概要与三条红线、workflow 骨架、硬性规则、文件索引，并注明「执行到哪步读哪份」。理由：Agent Skills 规范建议控制器约 5000 tokens 内、细节渐进式披露；审核指出 SKILL.md 塞了过多实现细节。附带收益：装后校验接入点（下条）在控制器与细则中各出现一次，层级清晰。
+- **新增 `scripts/verify.py` 装后机械校验**（纯标准库、绝对只读、--json、git 命令带超时、无法确认一律 WARN/SKIP 不臆断，与 audit.py 同口径）：管理文件齐备、中文占位符残留、`.gitignore` 含 `.env` 且 `.env` 未被跟踪、pre-push 闸门就位（含 core.hooksPath 探测）、按项目模式校验部署产物、入库文件私钥头快扫，任何 FAIL 即 exit 1；init 第 4 步与 adopt D 步接入为收口动作。理由：安装正确性此前只有提示词级保证（instruction-level idempotence ≠ actual idempotence），装后机械校验用约两成工程量拿到确定性验收的大头收益；自测两个假项目（装全 / 缺漏坏）exit 0/1 与逐项报告均符合预期。
+- **audit.py fixture 测试矩阵重建并入库**：0.5.7 声称的「10 项 fixture 测试矩阵」从未提交、测试资产丢失；现重建为 `tests/`（6 静态 fixture + 4 动态 fixture，27 个 unittest 用例：跑通/JSON 合法/只读性快照对比/探测正确性抽查），新增 CI `tests.yml`（push/PR 触发，Python 3.8–3.12 矩阵）。fixture 的隐私测试值（私钥头、.env、本机路径）全部运行时拼接/动态构造，不入库字面量，与全局 pre-push 隐私闸门兼容。理由：Skill 复杂度早已超过「零测试」能兜住的水平；fixture 不入库等于每次改动都靠回忆回归。
+- **装进项目的 AGENTS.md 模板改分层阅读**：原「强制阅读顺序」6 份文件（约 24 KB 固定开销）改为「每次任务必读小文件（AGENTS/STATE/TODO/任务引用，约 6 KB）+ 按触发读大部头（PROJECT_RULES 流程裁决与同步时、INDEX 定位资源时、deployment.md 部署时、DESIGN.md UI 时等）」；README 双语「不增加日常 token 负担」改为如实的分层加载口径。理由：审核指出原表述与强制阅读清单的实际 context 成本矛盾，名不副实。
+- **装前自检（0.6.0 发布前第一遍复查）四处修复**：①管理规范两份文件的阅读口径同步为分层加载——compact §0.1 旧口径「按 AGENTS 顺序读 README/规则/索引/状态/TODO」与新模板直接冲突且会随安装拷进每个项目（compact §11.3 本就是新口径，§0.1 属没删干净的旧残留），reference §1.1 与 §5.2 推荐模板同步；②go 栈 entrypoint 三向对齐——go 栈 ENTRYPOINT 烤进镜像、无 docker-entrypoint.sh，init 落盘清单与 chmod 清单注明适用范围、SKILL.md 文件索引措辞修正、verify.py 改为「Dockerfile 引用 docker-entrypoint 才必查」（缺失但 Dockerfile 自含 ENTRYPOINT 判 PASS）；③audit.py docstring 过期指针「SKILL.md 存储纪律」改指 references/info-collection.md；④tests/fixtures 的 .DS_Store 加 .gitignore 例外（防索引重建后 CI 静默翻车）。理由：发布前模拟安装走查发现的真冲突与三向不一致，同步修复避免把矛盾装进新项目。
+- **发布前第二遍端到端模拟验证（沙盒项目实测）一处修复**：`backup.sh.tmpl` 头部注释的 crontab 示例行用了中文占位符（`<分> <时> <项目目录>`），照流程安装的项目会被自己的 verify.py 判占位符残留 FAIL——模板与校验器自相矛盾，示例行已改为英文隔离占位符（`<MIN> <HOUR> <PROJECT_DIR>`，与存储纪律的占位符命名约定一致）。模拟本身结论：init 全流程（管理体系 + python 栈部署体系 + 闸门安装）跑通，verify.py 拦下两处安装漏填（deployment.md 的 `<仓库地址>`/`<DNS托管商>`）并指引修复后全 PASS；pre-push 闸门功能实测——私钥头/本机路径/公网 IP 推送均拦截、干净提交与 RFC 5737 文档段 IP 放行，且在全局 `core.hooksPath` 机器上经全局钩子链式调用实际生效（verify.py 对该场景正确 WARN 提示人工确认）；adopt 全流程跑通——audit.py 正确检出 .env 被跟踪与入库公网 IP，幂等安装后管理文档 1/10 → 10/10、verify 全 PASS；幂等重跑零意外 diff。
+
 ## [0.5.11] - 2026-08-12
 
 隐私闸门两项放行机制修正（某生产项目发布实测驱动）。

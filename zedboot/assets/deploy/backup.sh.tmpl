@@ -3,7 +3,7 @@
 # 项目备份脚本（zedboot skill 模板）
 # 部署：归属项目账号，加入其 crontab。真实调度时间与日志路径属不可推导
 #   运维值，写入本地 docs/private/ops.md（不入库），脚本与入库文档只写占位符：
-#   <分> <时> * * * <项目目录>/backup.sh >> <项目目录>/backups/backup.log 2>&1
+#   <MIN> <HOUR> * * * <PROJECT_DIR>/backup.sh >> <PROJECT_DIR>/backups/backup.log 2>&1
 # 前置：宿主机已装 sqlite3（SQLite 在线备份用）
 # 对应 references/deployment-guide.md §2/§8（SQLite 在线备份一致性、异地容灾）
 # ============================================================

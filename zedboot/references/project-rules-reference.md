@@ -26,9 +26,10 @@ AI 快速指令块的唯一正式来源是《精简执行版》第 0 章，本�
 AI 日常工作通常只需要：
 
 1. 项目自己的 `AGENTS.md`；
-2. 精简执行版；
-3. 当前项目索引、状态和 TODO；
-4. 当前任务相关文件。
+2. 当前项目状态和 TODO；
+3. 当前任务相关文件。
+
+精简执行版（`PROJECT_RULES.md`）与其余管理文档按 `AGENTS.md` 阅读纪律的触发条件加载（流程裁决、文档同步、交接、收尾自检时）。
 
 只有在以下场景中，才查阅本参考版：
 
@@ -295,15 +296,20 @@ AGENTS 面向 AI，包含项目特有规则，不应复制完整通用规范。
 - 当前正式分支：
 - 管理规范版本：v1.4
 
-## 强制阅读顺序
+## 阅读纪律（分层加载）
+
+**每次任务必读**（均为小文件）：
 
 1. AGENTS.md
-2. README.md
-3. docs/project/PROJECT_RULES.md
-4. docs/project/PROJECT_INDEX.md
-5. docs/project/PROJECT_STATE.md
-6. docs/project/TODO.md
-7. 当前任务引用文件
+2. docs/project/PROJECT_STATE.md
+3. docs/project/TODO.md
+4. 当前任务引用文件
+
+**按触发读**（用到才读，只读相关小节）：
+
+- `docs/project/PROJECT_RULES.md`：流程裁决、文档同步、交接、收尾自检时
+- `README.md`：首次接触本项目或交接时
+- `docs/project/PROJECT_INDEX.md`：需要定位架构、资源、外部依赖信息时
 
 ## 项目特有约束
 

@@ -40,7 +40,8 @@
 
 1. 读 `<zedboot>/SKILL.md`，确认 frontmatter 可解析（有 `name:` 和 `description:`）。
 2. `python3 <zedboot>/scripts/audit.py --help` —— 应输出用法说明；再对一个真实目录试跑一次，应输出结构化审计报告而非报错。
+3. `python3 <zedboot>/scripts/verify.py --help` —— 应输出用法说明。
 
-两项全过后，向我汇报：zedboot 的安装路径、zedui 检测结果、以及一句确认——"zedboot 安装完成，对你的项目说『用 zedboot 从零初始化这个项目』或『用 zedboot 改造这个旧项目』即可开始"。
+三项全过后，向我汇报：zedboot 的安装路径、zedui 检测结果、以及一句确认——"zedboot 安装完成，对你的项目说『用 zedboot 从零初始化这个项目』或『用 zedboot 改造这个旧项目』即可开始"。
 
 ---

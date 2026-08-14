@@ -4,7 +4,7 @@
 > 适用于网站、App、游戏、AI、数据、自动化、研究、课程、商业与设计项目。
 
 # 0. AI 快速指令块
-1. **MUST** 先读 `AGENTS.md`，再按其中顺序读 README、规则、索引、状态和 TODO。
+1. **MUST** 按 `AGENTS.md` 的阅读纪律（分层加载）读文档：每次任务必读 `AGENTS.md`、`docs/project/PROJECT_STATE.md`、`docs/project/TODO.md` 与当前任务引用文件；README、PROJECT_INDEX、本规范细节小节等按触发条件再读。
 2. **MUST NOT** 在索引有效时无目的扫描整个项目、归档、依赖或构建目录。
 3. **MUST** 先识别项目模式、框架和现有结构，再决定目录；不得机械套用模板。
 4. **MUST** 先确认任务、验收标准、当前写入者、Git 状态和未提交修改，再写文件。
