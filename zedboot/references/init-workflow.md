@@ -41,7 +41,7 @@
 ## 4. 收口闭环
 
 - 跑 `python3 <skill路径>/scripts/verify.py <项目路径>` 做装后机械校验（文件齐备、占位符替换干净、`.env*` 未跟踪、闸门就位等），FAIL 项修复后再往下走。
-- 登记进 zedback 中央登记簿：把项目绝对路径追加一行到 `~/Documents/Backups/projects.index`（文件不存在则创建；路径已在簿中则跳过，幂等；**追加，绝不覆盖重写**）。无 zedback 环境（该文件体系不存在且用户未使用 zedback）时跳过此步。
+- （可选，仅当使用 zedback 备份体系时执行）登记进 zedback 中央登记簿：把项目绝对路径追加一行到 `~/Documents/Backups/projects.index`（文件不存在则创建；路径已在簿中则跳过，幂等；**追加，绝不覆盖重写**）。无 zedback 环境（该文件体系不存在且用户未使用 zedback）时跳过此步。
 - 三体系交界面只有三个文件，逐一核对：`AGENTS.md`（引用 PROJECT_RULES、DESIGN.md、deployment.md）、`PROJECT_INDEX.md`（外部资源表填好：GitHub 仓库/服务器/域名/端口/备份）、`TODO.md`（初始任务建好）。
 - 向用户输出**项目识别摘要**（管理规范 §7.1 的第一次实践），请用户确认。
 - 全部信息一次要齐、一次落盘；之后本 Skill 退场。

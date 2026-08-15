@@ -26,23 +26,3 @@
 5. **工作流改动要克制**：SKILL.md 的两条工作流经过多场景实测，改动需在 CHANGELOG 里写明实测依据，不凭感觉改。
 6. **收尾自检**：每次迭代收尾按项目模板同款五维自检执行（安全红线 grep / 交叉引用一致性 / 失效残留清理 / 脚本 `bash -n` 与 audit.py、verify.py 冒烟 / `python3 -m unittest discover -s tests` / CHANGELOG 同步），修复后复跑机械检查 + 纵览完整 diff；发版本前加查：README 双语同步、references 两份规范版本号一致、CI 绿。
 7. **zedback 联动纪律**：涉及开局/改造/部署流程的改动，必须保持两条契约成立——①项目路径以追加式（幂等）写进 zedback 中央登记簿 `~/Documents/Backups/projects.index`，绝不覆盖重写；②首次部署流程必须同步更新项目 `docs/private/backup-manifest.conf`（ZB_DEPLOYED=true + 服务器字段）。破坏任一契约即视为流程缺陷，需在同次改动中修复。
-
-## 真源纪律（维护者本机备忘）
-
-skill 本体的唯一真源在本仓库 `zedboot/` 目录。线上生效位置 `~/.kimi-code/skills/zedboot` 是**指向真源的符号链接**，不是副本。任何修改只改真源（仓库），线上零操作自动生效；发现线上是普通目录时（例如从旧机器恢复、照抄了旧版 rsync 部署），立即迁回并重建链接：
-
-```bash
-# 前置：diff -rq 确认真源与线上副本无差异（有差异则以仓库版为准先合并）
-diff -rq zedboot/ ~/.kimi-code/skills/zedboot/
-rm -rf ~/.kimi-code/skills/zedboot
-ln -s <zedboot 仓库路径>/zedboot ~/.kimi-code/skills/zedboot
-```
-
-（2026-08-11 已在 Kimi Code v0.34.0 实测验证：加载器跟随符号链接——对照实验中符号链接 skill 与真实目录 skill 均正常加载，新会话默认发现路径下符号链接的 zedboot 正常出现在 skill 列表。）
-
-回退预案（极端情况保留）：若某版加载器不跟随符号链接（新会话的 skill 列表里 zedboot 消失即为症状），则恢复"真实目录 + rsync 同步"旧模式：
-
-```bash
-rm ~/.kimi-code/skills/zedboot
-rsync -a --delete zedboot/ ~/.kimi-code/skills/zedboot/
-```

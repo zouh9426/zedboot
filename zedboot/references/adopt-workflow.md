@@ -26,7 +26,7 @@
 - UI：无 DESIGN.md → 自检 zedui 后调起其 Phase 0；有 DESIGN.md → 只登记不重定。
 - pre-push 隐私闸门（项目已启用 Git 时）：`.git/hooks/pre-push` 不存在则用 `assets/hooks/pre-push.tmpl` 安装（复制后 `chmod +x`，安装时把模板顶部的 `<项目名>` 替换为项目名（未替换时闸门自动降级））；服务器账号无需安装时配置（闸门运行时读 `docs/private/deploy.env` 的 `DEPLOY_USER`；`ops.md`「机器可读字段」为旧项目 fallback，见 `info-collection.md` 存储纪律三事实分离）；已存在则跳过并提示人工合并；装完按 init 第 1 步同款探测 `core.hooksPath`，非空且无法确认全局钩子会链式调用项目级钩子时，醒目警告用户并记入 PROJECT_STATE（同样用 `~/…` 相对表达，不写本机绝对路径）。
 - 已被 git 跟踪的 `.env` 等敏感文件（audit §3 会报）：`git rm --cached <文件>` 解除跟踪 + 确认 `.gitignore` 覆盖——`.gitignore` 不会解除已跟踪文件；**注意：仅解除跟踪不重写历史时，首次 push 会首推全历史扫描、命中历史中的 env 文件被闸门拦——需按提示先 filter-repo 重写历史**；并提醒用户：历史提交里仍有残留，彻底清理需历史重写（口径见 `info-collection.md`「转 Public 前置」），已泄露的密钥应同时轮换。
-- zedback 中央登记簿：同 init 第 4 步，把项目绝对路径追加进 `~/Documents/Backups/projects.index`（幂等）。
+- （可选，仅当使用 zedback 备份体系时执行）zedback 中央登记簿：同 init 第 4 步，把项目绝对路径追加进 `~/Documents/Backups/projects.index`（幂等）。
 - **绝不改动业务代码逻辑**；改造只动管理层、部署层、文档层。
 
 ## D. 对齐收尾
