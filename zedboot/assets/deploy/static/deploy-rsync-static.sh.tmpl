@@ -5,7 +5,7 @@ set -euo pipefail
 # 静态站发布脚本（本地执行，zedboot skill 模板）
 # 流程：本地 `npm run build` → 本脚本只同步发布目录 → 服务器 Caddy 直接伺服
 # 落地：复制到本地项目根目录为 deploy-rsync-static.sh
-# 隐私线：本脚本入库，只保留占位符；部署六事实（项目名/账号/目录/IP/密钥）
+# 隐私线：本脚本入库，只保留占位符；部署六事实（项目名/账号/目录/IP/密钥/SSH端口）
 #   统一存本地 docs/private/deploy.env（已 gitignore，永不入库），本脚本自动 source
 # 对应 references/deployment-guide.md §4 与 assets/deploy/static/README.md
 # ============================================================

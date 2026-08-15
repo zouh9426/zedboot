@@ -12,6 +12,7 @@
 - **deployment-static.md.tmpl 纯 HTML 文案补漏**：本轮前半段修了 static/README 与 checklist 的 npm run build 文案，独漏生成给项目日常读的 deployment.md（发布/恢复两处命令链）——纯 HTML 项目照抄必失败，已改"有构建步骤先构建、纯 HTML 直接执行"口径。理由：同一口径的修复必须覆盖所有落地文件，漏一个就等于没修。
 - **文档/模板小项十处**：AGENTS 模板悬空 bullet 删除；隐私指针从 skill 内部路径（装后悬空引用）改指项目内 docs/guides/deployment.md；deploy.env.tmpl 补 STATIC_OUTPUT_DIR 安装时填值指引（纯 HTML 首部署必踩 fail-closed 的预防）；info-collection 模式枚举补"静态站归入可部署代码项目"；init-workflow 补"部署件未提交前勿 git reset/stash"警示与 Go 栈 go.sum 前置说明；adopt-workflow 补"仅 git rm --cached 不重写历史时首次 push 必被拦"预告；deploy-rsync 尾行"自动迁移"标注适用范围；backup-manifest 注释说明 ZB_SSH_KEY 与 DEPLOY_KEY 同键不同形；backup-manifest 头部注释同步 zedback"纯数据解析、绝不 source"的消费方式（维护者先行改动，本版一并入库）。
 - **设计裁量备查**（未修项与理由）：rsync 排除 `.env*` 连 `.env.example` 一起排（服务器不需要该模板，可接受的保守）；audit 对子目录 env 变体只报 basename（不影响处置）；模板"落盘时删除"的 HTML 注释若漏删会触发 verify FAIL（属预期——verify 替你抓到没删干净）。
+- **「五事实→六事实」口径同步补漏（zedcheck Heavy 审计检出）**：下方 SSH_PORT 六事实条目的"六处同步"实际漏了五处——两个 deploy-rsync 脚本头部注释、deployment-guide.md §4 rsync 示例（补 `-p <SSH_PORT>`）与 §6 信息登记（五项→六项、六事实列表补 `SSH_PORT`）、README 双语隐私线（补「部署脚本消费的六事实另存 docs/private/deploy.env」）、tests/test_deploy.py 注释，本次全部补齐。理由：文档口径应与部署脚本实际消费的六事实一致，漏一个就可能误导使用方 agent。
 
 pre-push 语义钉死与部署契约收尾：
 

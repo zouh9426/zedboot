@@ -96,7 +96,7 @@ sudo -u <账号> cp /home/<账号>/.ssh/<项目名>_deploy.pub /home/<账号>/.s
 rsync -az --delete \
   --exclude .git --exclude node_modules --exclude '.env*' \
   --exclude data --exclude backups --exclude docs/private \
-  -e "ssh -i ~/.ssh/<DEPLOY_KEY>" \
+  -e "ssh -i ~/.ssh/<DEPLOY_KEY> -p <SSH_PORT>" \
   ./ <DEPLOY_USER>@<PRODUCTION_SERVER_IP>:/opt/<项目名>/
 ```
 
@@ -138,8 +138,8 @@ rsync -az --delete \
 **信息登记**（「位置与引用」类信息）分两层：
 
 - **可推导值可入库**：项目账号（建议默认 = 项目名，可独立修改）、应用/数据/备份目录（`/opt/<项目名>` 系）、默认密钥路径约定（`~/.ssh/<项目名>_deploy`）——登记进项目 `docs/project/PROJECT_INDEX.md` 的外部资源表与 `docs/guides/deployment.md`（骨架模板见 `assets/deploy/deployment.md.tmpl`）。域名、DNS 托管商与公开联系邮箱属公开信息，默认同样入库。
-- **不可推导值必须隔离**：服务器 IP、SSH 端口、密钥真实路径（偏离默认约定时）、SSH 别名、crontab 具体调度、备份策略细节——只写入本地 `docs/private/ops.md`（`.gitignore` 排除，永不入库，需配独立私有备份通道）；其中部署脚本需要的五项（项目名/账号/服务器目录/IP/密钥路径）另以机器可读形式写进 `docs/private/deploy.env`（见下条）。入库文档对应位置只写占位符（`<PRODUCTION_SERVER_IP>`、`<DEPLOY_USER>` 等）+ 指向 ops.md 的注记。容器端口分配可入库（本机回环端口不构成基础设施指纹）。
-- **部署脚本读取 `docs/private/deploy.env`**：部署六事实（`PROJECT_NAME` / `DEPLOY_USER` / `REMOTE_DIR` / `SERVER_IP` / `DEPLOY_KEY`）由该文件显式提供（模板见 `assets/project/deploy.env.tmpl`），脚本不从本地路径推导——三事实分离的落地载体就是它。同属 `.gitignore` 排除范围，永不入库。
+- **不可推导值必须隔离**：服务器 IP、SSH 端口、密钥真实路径（偏离默认约定时）、SSH 别名、crontab 具体调度、备份策略细节——只写入本地 `docs/private/ops.md`（`.gitignore` 排除，永不入库，需配独立私有备份通道）；其中部署脚本需要的六项（项目名/账号/服务器目录/IP/密钥路径/SSH端口）另以机器可读形式写进 `docs/private/deploy.env`（见下条）。入库文档对应位置只写占位符（`<PRODUCTION_SERVER_IP>`、`<DEPLOY_USER>` 等）+ 指向 ops.md 的注记。容器端口分配可入库（本机回环端口不构成基础设施指纹）。
+- **部署脚本读取 `docs/private/deploy.env`**：部署六事实（`PROJECT_NAME` / `DEPLOY_USER` / `REMOTE_DIR` / `SERVER_IP` / `DEPLOY_KEY` / `SSH_PORT`）由该文件显式提供（模板见 `assets/project/deploy.env.tmpl`），脚本不从本地路径推导——三事实分离的落地载体就是它。同属 `.gitignore` 排除范围，永不入库。
 
 **秘密边界**：秘密本体（私钥内容、密码、token）**永不进 Git**，只存在于服务器 `.env` 与用户本地。`.env.example` 入库仅作为结构模板，不带任何真实值。
 

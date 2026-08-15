@@ -17,7 +17,7 @@ IP 用 RFC 5737 文档示例段 192.0.2.1，密钥用 ~ 相对占位路径，不
 钉住的行为：
   容器脚本：
     - 缺 docs/private/deploy.env → exit 1 且报 PROJECT_NAME 提示（:? 空变量守卫）
-    - 配齐五事实 → rsync 被调用，排除项含 docs/private 与 .env*（容器脚本已
+    - 配齐六事实 → rsync 被调用，排除项含 docs/private 与 .env*（容器脚本已
       扩为 .env* 全家族，覆盖 .env/.env.local 等），目标 <DEPLOY_USER>@<SERVER_IP>:<REMOTE_DIR>/
   静态脚本：
     - 发布目录存在（默认 dist / 或 STATIC_OUTPUT_DIR=out）→ 只推该目录
@@ -45,7 +45,7 @@ NEXTJS_DOCKERFILE_TMPL = os.path.join(REPO_ROOT, "zedboot", "assets", "deploy",
                                       "nextjs", "Dockerfile.tmpl")
 BASH_AVAILABLE = shutil.which("bash") is not None
 
-# 部署五事实（运行时写入 deploy.env；IP 为 RFC 5737 文档示例段，密钥为占位路径）
+# 部署六事实（运行时写入 deploy.env；IP 为 RFC 5737 文档示例段，密钥为占位路径）
 PROJECT_NAME = "acme-server"
 DEPLOY_USER = "deploybot"
 REMOTE_DIR = "/opt/acme-server"
@@ -121,7 +121,7 @@ class TestDeployRsyncScripts(unittest.TestCase):
         return self._install(DEPLOY_RSYNC_STATIC_TMPL, "deploy-rsync-static.sh")
 
     def _deploy_env(self, extra=None):
-        """写 docs/private/deploy.env：五事实 + 可选附加行（如 STATIC_OUTPUT_DIR）。"""
+        """写 docs/private/deploy.env：六事实 + 可选附加行（如 STATIC_OUTPUT_DIR）。"""
         lines = ["%s=%s" % (k, v) for k, v in FIVE_FACTS]
         if extra is not None:
             lines.append(extra)
@@ -144,7 +144,7 @@ class TestDeployRsyncScripts(unittest.TestCase):
                          "缺部署事实不应调用 rsync")
 
     def test_container_full_facts_invokes_rsync(self):
-        """配齐五事实 → exit 0，rsync 被调用：排除含 docs/private 与 .env*
+        """配齐六事实 → exit 0，rsync 被调用：排除含 docs/private 与 .env*
         （容器脚本现状已扩为 .env*，覆盖 .env 全家族，勿回退为裸 .env），
         目标地址正确。"""
         script = self._install_container()
