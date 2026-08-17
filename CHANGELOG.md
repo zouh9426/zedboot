@@ -2,6 +2,10 @@
 
 本项目所有值得记录的变更都写在这里。格式约定：每条目回答两个问题——**改了什么**、**为什么这么改（决策理由）**。
 
+## [Unreleased] - 2026-08-17
+
+- **发布纪律修正：GitHub Release 只在 minor 版本创建**。AGENTS.md 迭代纪律第 2 条原口径"每个正式版本打 tag 并建 GitHub Release"导致 0.5.x 系列两天内连发 8 个 patch Release、0.3.0→0.5.0 一小时内连发三个 minor，Release 被当成了 commit 用。改为：tag 纪律不变（每个正式版本照常打 tag），GitHub Release 只在 minor 版本（0.x.0）创建，patch 变更随下一个 minor 的 Release notes 汇总；紧急热修可例外，须在 CHANGELOG 写明理由。理由：Release 会通知 watcher 并出现在订阅 feed，patch 级噪音对关注者无价值；tag 已足够承担版本快照标记职责。
+
 ## [0.8.1] - 2026-08-15
 
 部署模板、pre-push 闸门与文档一致性集中修复版。不加功能、不动 Docker 三档架构。

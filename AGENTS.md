@@ -20,7 +20,7 @@
 ## 迭代纪律（每次改动都要做到）
 
 1. **改代码必写 CHANGELOG.md**：条目回答两个问题——改了什么、为什么这么改（决策理由）。
-2. **改完同步 GitHub**：commit + push；每个正式版本打 tag 并建 GitHub Release，历史版本快照永不删除。
+2. **改完同步 GitHub**：commit + push；每个正式版本照常打 tag（历史版本快照永不删除），但 **GitHub Release 只在 minor 版本（0.x.0）创建**。patch 版本（0.x.1+）只打 tag + 写 CHANGELOG，其变更随下一个 minor 的 Release notes 一并汇总发布。例外：影响所有现有用户的紧急修复可为 patch 单独建 Release，须在 CHANGELOG 写明理由。判断标准：Release notes 里写不出一条"值得用户升级的内容"就不建 Release。
 3. **双语文档同步**：README.md ↔ README.en.md、SETUP.md ↔ SETUP.en.md，改了一边另一边必须在同一次迭代里跟上。中文是主门面，英文版跟随。
 4. **规范一致性**：`references/` 两份管理规范版本号必须一致，强制规则以精简版为准；`assets/` 模板改动后，检查 `SKILL.md` 的文件索引与流程描述是否仍然成立。
 5. **工作流改动要克制**：SKILL.md 的两条工作流经过多场景实测，改动需在 CHANGELOG 里写明实测依据，不凭感觉改。
